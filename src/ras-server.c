@@ -10,7 +10,7 @@
 
 
 #define SERV_TCP_PORT	9527
-#define MAX_SINGLE_LINE	15000
+#define MAX_LINE_SIZE	15000
 #define MAX_CMD_SIZE	256
 
 const char* prompt = "% ";
@@ -18,7 +18,7 @@ const char* motd = "****************************************\n"
 		   "** Welcome to the information server. **\n"
 		   "****************************************\n";
 
-int ras ()
+int ras (int fd)
 {
 	return 0;
 }
