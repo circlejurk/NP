@@ -5,7 +5,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>		/* struct sockaddr_in */
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 
 #define SERV_TCP_PORT	9527
@@ -25,7 +26,9 @@ int ras ()
 
 int main (void)
 {
-	int			sockfd, rasfd, clilen, childpid;
+	int			sockfd, rasfd;
+	socklen_t		clilen;
+	pid_t			childpid;
 	struct sockaddr_in	cli_addr, serv_addr;
 
 	/* open a TCP socket */
@@ -52,6 +55,26 @@ int main (void)
 		exit (1);
 	}
 
+	while (1) {
+		/* accept connection request */
+		clilen = sizeof(cli_addr);
+		rasfd = accept (sockfd, (struct sockaddr *)&cli_addr, &clilen);
+		if (rasfd < 0) {
+			fputs ("server error: accept failed", stderr);
+			exit (1);
+		}
+
+		/* fork another process to handle the request */
+		if ((childpid = fork ()) < 0) {
+			fputs ("server error: fork failed", stderr);
+			exit (1);
+		} else if (childpid == 0) {
+			close (sockfd);
+			ras (rasfd);
+			exit (0);
+		}
+		close (rasfd);
+	}
 
 	return 0;
 }
