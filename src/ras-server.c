@@ -42,14 +42,18 @@ void check_illegal (const char *line)
 	}
 }
 
-void printenv (char **envp)
+void printenv (const char *name)
 {
-	int i = 0;
-	while (envp[i] != NULL) {
-		write (STDOUT_FILENO, envp[i], strlen(envp[i]));
-		write (STDOUT_FILENO, "\n", 1);
-		++i;
-	}
+	char *value = getenv (name), *out;
+	if (value == NULL)
+		return;
+	out = malloc (strlen(name) + 1 + strlen(value) + 1);
+	strncpy (out, name, strlen(name));
+	strncpy (out + strlen(name), "=", 1);
+	strncpy (out + strlen(name) + 1, value, strlen(value));
+	strncpy (out + strlen(name) + 1 + strlen(value), "\n", 1);
+	write (STDOUT_FILENO, out, strlen(name) + 1 + strlen(value) + 1);
+	free (out);
 }
 
 int cmd_to_argv (char *cmd, char **argv)
@@ -114,9 +118,11 @@ int shell (void)
 		if (*argv != NULL && strcmp (*argv, "exit") == 0) {
 			connection = 0;
 		} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
-			printenv (environ);
+			if (argc == 2)
+				printenv (argv[1]);
 		} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
-			setenv (argv[1], argv[2], 1);
+			if (argc == 3)
+				setenv (argv[1], argv[2], 1);
 		} else if ((childpid = fork()) < 0) {	/* fork a child to execute the command */
 			fputs ("server error: fork failed\n", stderr);
 			exit (1);
