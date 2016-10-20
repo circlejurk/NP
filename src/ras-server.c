@@ -37,11 +37,12 @@ void check_illegal (const char *line)
 	}
 }
 
-void env_init (char **envp)
+char** env_init (char **envp)
 {
 	envp = malloc (1);
 	envp[0] = malloc (strlen("PATH=bin:."));
 	strncpy (envp[0], "PATH=bin:.", strlen("PATH=bin:."));
+	return envp;
 }
 
 int cmd_to_argv (char *cmd, char **argv)
@@ -68,7 +69,7 @@ int shell (void)
 	char	line[MAX_LINE_SIZE + 1], *p, *argv[MAX_CMD_SIZE / 2 + 1] = {0}, **envp = NULL;
 
 	/* initialize the environment variables */
-	env_init (envp);
+	envp = env_init (envp);
 
 	/* print the welcome message */
 	write (STDOUT_FILENO, motd, sizeof(motd));
@@ -83,7 +84,7 @@ int shell (void)
 			fputs ("server error: read failed\n", stderr);
 			exit (1);
 		} else if (feof (stdin) && p == (char *)0) {	/* EOF, no data was read */
-			return 0;
+			break;
 		} else if (feof (stdin)) {			/* EOF, some data was read */
 			connection = 0;
 		}
@@ -107,9 +108,14 @@ int shell (void)
 		}
 
 		/* free the allocated space */
-		for (i = 0; i < argc; ++i)
+		for (i = 0; i < argc; ++i) {
 			free (argv[i]);
+			argv[i] = NULL;
+		}
 	}
+	for (i = 0; envp[i] != NULL; ++i)
+		free (envp[i]);
+	free (envp);
 
 	return 0;
 }
