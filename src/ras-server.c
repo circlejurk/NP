@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <strings.h>
+#define __USE_GNU
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/types.h>
