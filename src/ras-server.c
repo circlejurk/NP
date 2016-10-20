@@ -1,10 +1,15 @@
 #include <stdio.h>
+#define __USE_MISC
+#define __USE_XOPEN2K
 #include <stdlib.h>
+#undef __USE_MISC
+#undef __USE_XOPEN2K
 #include <ctype.h>
 #include <string.h>
 #include <strings.h>
 #define __USE_GNU
 #include <unistd.h>
+#undef __USE_GNU
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -37,12 +42,14 @@ void check_illegal (const char *line)
 	}
 }
 
-char** env_init (char **envp)
+void printenv (char **envp)
 {
-	envp = malloc (1);
-	envp[0] = malloc (strlen("PATH=bin:."));
-	strncpy (envp[0], "PATH=bin:.", strlen("PATH=bin:."));
-	return envp;
+	int i = 0;
+	while (envp[i] != NULL) {
+		write (STDOUT_FILENO, envp[i], strlen(envp[i]));
+		write (STDOUT_FILENO, "\n", 1);
+		++i;
+	}
 }
 
 int cmd_to_argv (char *cmd, char **argv)
@@ -61,15 +68,24 @@ int cmd_to_argv (char *cmd, char **argv)
 	return argc;
 }
 
+void clear_argv (int argc, char **argv)
+{
+	int i;
+	for (i = 0; i < argc; ++i) {
+		free (argv[i]);
+		argv[i] = NULL;
+	}
+}
+
 int shell (void)
 {
-	int	i;
 	int	connection = 1, argc;
 	pid_t	childpid;
-	char	line[MAX_LINE_SIZE + 1], *p, *argv[MAX_CMD_SIZE / 2 + 1] = {0}, **envp = NULL;
+	char	line[MAX_LINE_SIZE + 1], *p, *argv[MAX_CMD_SIZE / 2 + 1] = {0};
 
 	/* initialize the environment variables */
-	envp = env_init (envp);
+	clearenv ();
+	putenv ("PATH=bin:.");
 
 	/* print the welcome message */
 	write (STDOUT_FILENO, motd, sizeof(motd));
@@ -84,7 +100,7 @@ int shell (void)
 			fputs ("server error: read failed\n", stderr);
 			exit (1);
 		} else if (feof (stdin) && p == (char *)0) {	/* EOF, no data was read */
-			break;
+			return 0;
 		} else if (feof (stdin)) {			/* EOF, some data was read */
 			connection = 0;
 		}
@@ -95,12 +111,17 @@ int shell (void)
 		/* parse the input command */
 		argc = cmd_to_argv (line, argv);
 
-		/* fork a child to execute the command */
-		if ((childpid = fork()) < 0) {
+		if (*argv != NULL && strcmp (*argv, "exit") == 0) {
+			connection = 0;
+		} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
+			printenv (environ);
+		} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
+			setenv (argv[1], argv[2], 1);
+		} else if ((childpid = fork()) < 0) {	/* fork a child to execute the command */
 			fputs ("server error: fork failed\n", stderr);
 			exit (1);
 		} else if (childpid == 0) {
-			execvpe (argv[0], argv, envp);
+			execvpe (*argv, argv, environ);
 			fputs ("server error: exec failed\n", stderr);
 			exit (1);
 		} else {
@@ -108,14 +129,8 @@ int shell (void)
 		}
 
 		/* free the allocated space */
-		for (i = 0; i < argc; ++i) {
-			free (argv[i]);
-			argv[i] = NULL;
-		}
+		clear_argv (argc, argv);
 	}
-	for (i = 0; envp[i] != NULL; ++i)
-		free (envp[i]);
-	free (envp);
 
 	return 0;
 }
