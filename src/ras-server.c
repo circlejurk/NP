@@ -128,7 +128,7 @@ int shell (void)
 			exit (1);
 		} else if (childpid == 0) {
 			execvpe (*argv, argv, environ);
-			fputs ("server error: exec failed\n", stderr);
+			fprintf (stderr, "Unknown command: [%s]\n", *argv);
 			exit (1);
 		} else {
 			wait (NULL);
