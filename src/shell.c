@@ -24,8 +24,12 @@ const char motd[] = "****************************************\n"
 const char prompt[] = "% ";
 
 void check_illegal (const char *line);
-
+void readline (char *line, int *connection);
 void printenv (const char *name);
+void open_files (const char *in_file, const char *out_file);
+void create_pipes (int **pipefd_p, int num);
+void set_pipes (int *pipefd, int index, int progc);
+void close_pipes (int *pipefd, int num);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
@@ -35,9 +39,9 @@ void clear_argv (int argc, char **argv, char **in_file, char **out_file);
 
 int shell (void)
 {
-	int	i, connection = 1, argc, progc, infd, outfd;
 	pid_t	childpid;
-	char	line[MAX_LINE_SIZE + 1], *p, *cmds[(MAX_LINE_SIZE - 1) / 4];
+	int	i, connection = 1, argc, progc, *pipefd = NULL;
+	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 4];
 	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
 
 	/* initialize the environment variables */
@@ -52,21 +56,16 @@ int shell (void)
 		write (STDOUT_FILENO, prompt, sizeof(prompt));
 
 		/* read one line from client input */
-		p = fgets (line, MAX_LINE_SIZE + 1, stdin);
-		if (ferror (stdin)) {
-			fputs ("server error: read failed\n", stderr);
-			exit (1);
-		} else if (feof (stdin) && p == (char *)0) {	/* EOF, no data was read */
-			return 0;
-		} else if (feof (stdin)) {			/* EOF, some data was read */
-			connection = 0;
-		}
+		readline (line, &connection);
 
 		/* check for illegal input */
 		check_illegal (line);
 
 		/* parse the total input line into commands seperated by pipes */
 		progc = line_to_cmds (line, cmds);
+
+		/* create (progc - 1) pipes */
+		create_pipes (&pipefd, progc - 1);
 
 		for (i = 0; i < progc; ++i) {
 			/* parse the input command */
@@ -81,29 +80,25 @@ int shell (void)
 			} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
 				if (argc == 3)
 					setenv (argv[1], argv[2], 1);
-			} else if ((childpid = fork()) < 0) {	/* fork a child to execute the command */
+			} else if ((childpid = fork()) < 0) {
 				fputs ("server error: fork failed\n", stderr);
 				exit (1);
 			} else if (childpid == 0) {
+				/* set up pipefds if needed */
+				set_pipes (pipefd, i, progc);
+
 				/* open files if redirections are used */
-				if (in_file) {
-					infd = open (in_file, O_RDONLY, 0);
-					close (STDIN_FILENO);
-					dup (infd);
-					close (infd);
-				}
-				if (out_file) {
-					/* open(create) file with mode 644 */
-					outfd = open (out_file, O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-					close (STDOUT_FILENO);
-					dup (outfd);
-					close (outfd);
-				}
+				open_files (in_file, out_file);
+
 				/* exec the program */
 				execvpe (*argv, argv, environ);
 				fprintf (stderr, "Unknown command: [%s]\n", *argv);
 				exit (1);
 			} else {
+				if (i != 0)
+					close (pipefd[2 * (i - 1)]);
+				if (i != progc - 1)
+					close (pipefd[2 * i + 1]);
 				wait (NULL);
 			}
 
@@ -111,12 +106,83 @@ int shell (void)
 			clear_argv (argc, argv, &in_file, &out_file);
 		}
 
+		/* close inline pipes */
+		close_pipes (pipefd, progc - 1);
+
 		/* free the allocated space of commands */
 		clear_cmds (progc, cmds);
 	}
 
 	return 0;
 }
+
+void close_pipes (int *pipefd, int num)
+{
+	int i;
+	for (i = 0; i < 2 * num; ++i)
+		close (pipefd[i]);
+	free (pipefd);
+	pipefd = NULL;
+}
+
+void create_pipes (int **pipefd_p, int num)
+{
+	int i;
+	*pipefd_p = malloc (2 * num);
+	for (i = 0; i < num; ++i) {
+		if (pipe((*pipefd_p) + 2 * i) < 0) {
+			fputs ("server error: pipe failed\n", stderr);
+			exit (1);
+		}
+	}
+}
+
+void set_pipes (int *pipefd, int index, int progc)
+{
+	int i;
+	if (index != 0) {
+		close (STDIN_FILENO);
+		dup (pipefd[2 * (index - 1)]);
+	}
+	if (index != progc - 1) {
+		close (STDOUT_FILENO);
+		dup (pipefd[2 * index + 1]);
+	}
+	for (i = 0; i < 2 * (progc - 1); ++i)
+		close (pipefd[i]);
+}
+
+void open_files (const char *in_file, const char *out_file)
+{
+	int infd, outfd;
+	if (in_file) {
+		infd = open (in_file, O_RDONLY, 0);
+		close (STDIN_FILENO);
+		dup (infd);
+		close (infd);
+	}
+	if (out_file) {
+		outfd = open (out_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+		close (STDOUT_FILENO);
+		dup (outfd);
+		close (outfd);
+	}
+}
+
+void readline (char *line, int *connection)
+{
+	char *p;
+	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
+	if (ferror (stdin)) {
+		fputs ("server error: read failed\n", stderr);
+		exit (1);
+	} else if (feof (stdin) && p == (char *)0) {	/* EOF, no data was read */
+		exit (0);
+	} else if (feof (stdin)) {			/* EOF, some data was read */
+		*connection = 0;
+	}
+}
+
 
 void check_illegal (const char *line)
 {
@@ -190,12 +256,12 @@ int line_to_cmds (char *line, char **cmds)
 	int	progc = 0;
 	char	*cmd;
 
-	cmd = strtok (line, "|");
+	cmd = strtok (line, "|\r\n");
 	while (cmd != NULL ) {
 		cmds[progc] = malloc (strlen(cmd) + 1);
 		strncpy (cmds[progc], cmd, strlen(cmd) + 1);
 		++progc;
-		cmd = strtok (NULL, "|");
+		cmd = strtok (NULL, "|\r\n");
 	}
 	return progc;
 }
