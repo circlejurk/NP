@@ -86,10 +86,9 @@ int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 
 void clear_argv (int argc, char **argv, char **in_file, char **out_file)
 {
-	int i;
-	for (i = 0; i < argc; ++i) {
-		free (argv[i]);
-		argv[i] = NULL;
+	while (--argc >= 0) {
+		free (argv[argc]);
+		argv[argc] = NULL;
 	}
 	free (*in_file);
 	*in_file = NULL;
@@ -97,11 +96,34 @@ void clear_argv (int argc, char **argv, char **in_file, char **out_file)
 	*out_file = NULL;
 }
 
+int line_to_cmds (char *line, char **cmds)
+{
+	int	progc = 0;
+	char	*cmd;
+
+	cmd = strtok (line, "|");
+	while (cmd != NULL ) {
+		cmds[progc] = malloc (strlen(cmd) + 1);
+		strncpy (cmds[progc], cmd, strlen(cmd) + 1);
+		++progc;
+		cmd = strtok (NULL, "|");
+	}
+	return progc;
+}
+
+void clear_cmds (int progc, char **cmds)
+{
+	while (--progc >= 0) {
+		free (cmds[progc]);
+		cmds[progc] = NULL;
+	}
+}
+
 int shell (void)
 {
-	int	connection = 1, argc, infd, outfd;
+	int	i, connection = 1, argc, progc, infd, outfd;
 	pid_t	childpid;
-	char	line[MAX_LINE_SIZE + 1], *p;
+	char	line[MAX_LINE_SIZE + 1], *p, *cmds[(MAX_LINE_SIZE - 1) / 4];
 	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
 
 	/* initialize the environment variables */
@@ -129,46 +151,54 @@ int shell (void)
 		/* check for illegal input */
 		check_illegal (line);
 
-		/* parse the input command */
-		argc = cmd_to_argv (line, argv, &in_file, &out_file);
+		/* parse the total input line into commands seperated by pipes */
+		progc = line_to_cmds (line, cmds);
 
-		/* execute the command accordingly */
-		if (*argv != NULL && strcmp (*argv, "exit") == 0) {
-			connection = 0;
-		} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
-			if (argc == 2)
-				printenv (argv[1]);
-		} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
-			if (argc == 3)
-				setenv (argv[1], argv[2], 1);
-		} else if ((childpid = fork()) < 0) {	/* fork a child to execute the command */
-			fputs ("server error: fork failed\n", stderr);
-			exit (1);
-		} else if (childpid == 0) {
-			/* open files if redirections are used */
-			if (in_file) {
-				infd = open (in_file, O_RDONLY, 0);
-				close (STDIN_FILENO);
-				dup (infd);
-				close (infd);
+		for (i = 0; i < progc; ++i) {
+			/* parse the input command */
+			argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
+
+			/* execute the command accordingly */
+			if (*argv != NULL && strcmp (*argv, "exit") == 0) {
+				connection = 0;
+			} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
+				if (argc == 2)
+					printenv (argv[1]);
+			} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
+				if (argc == 3)
+					setenv (argv[1], argv[2], 1);
+			} else if ((childpid = fork()) < 0) {	/* fork a child to execute the command */
+				fputs ("server error: fork failed\n", stderr);
+				exit (1);
+			} else if (childpid == 0) {
+				/* open files if redirections are used */
+				if (in_file) {
+					infd = open (in_file, O_RDONLY, 0);
+					close (STDIN_FILENO);
+					dup (infd);
+					close (infd);
+				}
+				if (out_file) {
+					/* open(create) file with mode 644 */
+					outfd = open (out_file, O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+					close (STDOUT_FILENO);
+					dup (outfd);
+					close (outfd);
+				}
+				/* exec the program */
+				execvpe (*argv, argv, environ);
+				fprintf (stderr, "Unknown command: [%s]\n", *argv);
+				exit (1);
+			} else {
+				wait (NULL);
 			}
-			if (out_file) {
-				/* open(create) file with mode 644 */
-				outfd = open (out_file, O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-				close (STDOUT_FILENO);
-				dup (outfd);
-				close (outfd);
-			}
-			/* exec the program */
-			execvpe (*argv, argv, environ);
-			fprintf (stderr, "Unknown command: [%s]\n", *argv);
-			exit (1);
-		} else {
-			wait (NULL);
+
+			/* free the allocated space of one command */
+			clear_argv (argc, argv, &in_file, &out_file);
 		}
 
-		/* free the allocated space */
-		clear_argv (argc, argv, &in_file, &out_file);
+		/* free the allocated space of commands */
+		clear_cmds (progc, cmds);
 	}
 
 	return 0;
