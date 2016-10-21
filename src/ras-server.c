@@ -10,8 +10,10 @@
 #define __USE_GNU
 #include <unistd.h>
 #undef __USE_GNU
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -56,36 +58,51 @@ void printenv (const char *name)
 	free (out);
 }
 
-int cmd_to_argv (char *cmd, char **argv)
+int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 {
 	int	argc = 0;
 	char	*arg;
 
 	arg = strtok (cmd, " \r\n");
 	while (arg != NULL) {
-		argv[argc] = malloc (strlen(arg) + 1);
-		strncpy (argv[argc], arg, strlen(arg) + 1);
-		++argc;
+		if (strcmp (arg, ">") == 0) {
+			arg = strtok (NULL, " \r\n");
+			*out_file = malloc (strlen(arg) + 1);
+			strncpy (*out_file, arg, strlen(arg) + 1);
+		} else if (strcmp (arg, "<") == 0) {
+			arg = strtok (NULL, " \r\n");
+			*in_file = malloc (strlen(arg) + 1);
+			strncpy (*in_file, arg, strlen(arg) + 1);
+		} else {
+			argv[argc] = malloc (strlen(arg) + 1);
+			strncpy (argv[argc], arg, strlen(arg) + 1);
+			++argc;
+		}
 		arg = strtok (NULL, " \r\n");
 	}
 
 	return argc;
 }
 
-void clear_argv (int argc, char **argv)
+void clear_argv (int argc, char **argv, char **in_file, char **out_file)
 {
 	int i;
 	for (i = 0; i < argc; ++i) {
 		free (argv[i]);
 		argv[i] = NULL;
 	}
+	free (*in_file);
+	*in_file = NULL;
+	free (*out_file);
+	*out_file = NULL;
 }
 
 int shell (void)
 {
-	int	connection = 1, argc;
+	int	connection = 1, argc, infd, outfd;
 	pid_t	childpid;
-	char	line[MAX_LINE_SIZE + 1], *p, *argv[MAX_CMD_SIZE / 2 + 1] = {0};
+	char	line[MAX_LINE_SIZE + 1], *p;
+	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
 
 	/* initialize the environment variables */
 	clearenv ();
@@ -113,8 +130,9 @@ int shell (void)
 		check_illegal (line);
 
 		/* parse the input command */
-		argc = cmd_to_argv (line, argv);
+		argc = cmd_to_argv (line, argv, &in_file, &out_file);
 
+		/* execute the command accordingly */
 		if (*argv != NULL && strcmp (*argv, "exit") == 0) {
 			connection = 0;
 		} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
@@ -127,6 +145,21 @@ int shell (void)
 			fputs ("server error: fork failed\n", stderr);
 			exit (1);
 		} else if (childpid == 0) {
+			/* open files if redirections are used */
+			if (in_file) {
+				infd = open (in_file, O_RDONLY, 0);
+				close (STDIN_FILENO);
+				dup (infd);
+				close (infd);
+			}
+			if (out_file) {
+				/* open(create) file with mode 644 */
+				outfd = open (out_file, O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+				close (STDOUT_FILENO);
+				dup (outfd);
+				close (outfd);
+			}
+			/* exec the program */
 			execvpe (*argv, argv, environ);
 			fprintf (stderr, "Unknown command: [%s]\n", *argv);
 			exit (1);
@@ -135,7 +168,7 @@ int shell (void)
 		}
 
 		/* free the allocated space */
-		clear_argv (argc, argv);
+		clear_argv (argc, argv, &in_file, &out_file);
 	}
 
 	return 0;
