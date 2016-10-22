@@ -11,12 +11,13 @@ SRC_DIR=src
 INCLUDE_DIR=include
 
 CC=gcc
-CFLAGS=-c -Wall -Wextra -Wpedantic -O3 -ansi -static -fPIC
+CFLAGS=-c -Wall -Wextra -Wpedantic -O3 -ansi
+LFLAGS=-static -fPIC
 
 all:	${TARGET}
 
 ${TARGET}:	${BUILD_DIR}/ras-server.o ${BUILD_DIR}/shell.o
-	${CC} -o $@ $^
+	${CC} ${LFLAGS} -o $@ $^
 
 ${BUILD_DIR}/%.o:	${SRC_DIR}/%.c
 	-@[[ -d ${BUILD_DIR} ]] || mkdir ${BUILD_DIR}
