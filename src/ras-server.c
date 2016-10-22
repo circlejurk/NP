@@ -26,7 +26,7 @@ int main (void)
 {
 	int			sockfd, newsockfd;
 	socklen_t		clilen;
-	pid_t			childpid, ppid = getpid();
+	pid_t			childpid/*, ppid = getpid()*/;
 	struct sockaddr_in	cli_addr, serv_addr;
 
 	/* establish a handler for waiting the child processes */
