@@ -23,6 +23,8 @@ int main (void)
 	pid_t			childpid;
 	struct sockaddr_in	cli_addr, serv_addr;
 
+	chdir ("/u/103/0310004/ras");
+
 	/* open a TCP socket */
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		fputs ("server error: cannot open socket\n", stderr);
