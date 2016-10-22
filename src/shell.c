@@ -27,10 +27,10 @@ void check_illegal (const char *line);
 void readline (char *line, int *connection);
 void printenv (const char *name);
 void open_files (const char *in_file, const char *out_file);
-void create_pipes (int **pipefd_p, int num);
-void set_pipes (int **pipefd_p, int index, int progc);
-void close_pipes (int **pipefd_p, int index, int progc);
-void clear_pipes (int **pipefd_p);
+void save_stdfds (int *stdfd);
+void create_pipes (int *pipefd);
+void set_pipes_out (int *pipefd, int *stdfd, int index, int progc);
+void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
@@ -38,16 +38,21 @@ void clear_cmds (int progc, char **cmds);
 int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file);
 void clear_argv (int argc, char **argv, char **in_file, char **out_file);
 
+void execute (char **argv);
+
 int shell (void)
 {
 	pid_t	childpid;
-	int	i, connection = 1, argc, progc, *pipefd = NULL;
+	int	i, connection = 1, argc, progc, stdfd[2];
 	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 4];
 	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
 
 	/* initialize the environment variables */
 	clearenv ();
 	putenv ("PATH=bin:.");
+
+	/* save original stdin, stdout */
+	save_stdfds (stdfd);
 
 	/* print the welcome message */
 	write (STDOUT_FILENO, motd, sizeof(motd));
@@ -59,17 +64,15 @@ int shell (void)
 		/* read one line from client input */
 		readline (line, &connection);
 
-		/* check for illegal input */
-		check_illegal (line);
-
 		/* parse the total input line into commands seperated by pipes */
 		progc = line_to_cmds (line, cmds);
 
-		/* create (progc - 1) pipes */
-		create_pipes (&pipefd, progc - 1);
-
 		for (i = 0; i < progc; ++i) {
-			/* parse the input command */
+			int pipefd[2];
+
+			create_pipes (pipefd);
+
+			/* parse the input command into argv */
 			argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
 
 			/* execute the command accordingly */
@@ -85,28 +88,21 @@ int shell (void)
 				fputs ("server error: fork failed\n", stderr);
 				exit (1);
 			} else if (childpid == 0) {
-				/* set up pipefds if needed */
-				set_pipes (&pipefd, i, progc);
+				set_pipes_out (pipefd, stdfd, i, progc);
 
 				/* open files if redirections are used */
 				open_files (in_file, out_file);
 
 				/* exec the program */
-				execvpe (*argv, argv, environ);
-				fprintf (stderr, "Unknown command: [%s]\n", *argv);
-				exit (1);
+				execute (argv);
 			} else {
-				/* parent closes unused pipes */
-				close_pipes (&pipefd, i, progc);
+				set_pipes_in (pipefd, stdfd, i, progc);
 				wait (NULL);
 			}
 
 			/* free the allocated space of one command */
 			clear_argv (argc, argv, &in_file, &out_file);
 		}
-
-		/* free the allocated space for pipes */
-		clear_pipes (&pipefd);
 
 		/* free the allocated space of commands */
 		clear_cmds (progc, cmds);
@@ -115,46 +111,51 @@ int shell (void)
 	return 0;
 }
 
-void clear_pipes (int **pipefd_p)
+void set_pipes_out (int *pipefd, int *stdfd, int index, int progc)
 {
-	free (*pipefd_p);
-	*pipefd_p = NULL;
-}
-
-void close_pipes (int **pipefd_p, int index, int progc)
-{
-	if (index != 0)
-		close ((*pipefd_p)[2 * (index - 1)]);
-	if (index != progc - 1)
-		close ((*pipefd_p)[2 * index + 1]);
-}
-
-void create_pipes (int **pipefd_p, int num)
-{
-	int i;
-	*pipefd_p = malloc (2 * num);
-	for (i = 0; i < num; ++i) {
-		if (pipe((*pipefd_p) + 2 * i) < 0) {
-			fputs ("server error: pipe failed\n", stderr);
-			exit (1);
-		}
-	}
-}
-
-void set_pipes (int **pipefd_p, int index, int progc)
-{
-	int i;
-	if (index != 0) {
-		close (STDIN_FILENO);
-		dup ((*pipefd_p)[2 * (index - 1)]);
-	}
 	if (index != progc - 1) {
 		close (STDOUT_FILENO);
-		dup ((*pipefd_p)[2 * index + 1]);
+		dup (pipefd[1]);
+	} else {
+		close (STDOUT_FILENO);
+		dup (stdfd[1]);
 	}
-	for (i = 0; i < 2 * (progc - 1); ++i)
-		close ((*pipefd_p)[i]);
-	clear_pipes (pipefd_p);
+	close (pipefd[0]);
+	close (pipefd[1]);
+}
+
+void set_pipes_in (int *pipefd, int *stdfd, int index, int progc)
+{
+	if (index != progc - 1) {
+		close (STDIN_FILENO);
+		dup (pipefd[0]);
+	} else {
+		close (STDIN_FILENO);
+		dup (stdfd[0]);
+	}
+	close (pipefd[0]);
+	close (pipefd[1]);
+}
+
+void save_stdfds (int *stdfd)
+{
+	stdfd[0] = dup (STDIN_FILENO);
+	stdfd[1] = dup (STDOUT_FILENO);
+}
+
+void execute (char **argv)
+{
+	execvpe (*argv, argv, environ);
+	fprintf (stderr, "Unknown command: [%s]\n", *argv);
+	exit (1);
+}
+
+void create_pipes (int *pipefd)
+{
+	if (pipe(pipefd) < 0) {
+		fputs ("server error: failed to create pipes\n", stderr);
+		exit (1);
+	}
 }
 
 void open_files (const char *in_file, const char *out_file)
@@ -186,6 +187,7 @@ void readline (char *line, int *connection)
 	} else if (feof (stdin)) {			/* EOF, some data was read */
 		*connection = 0;
 	}
+	check_illegal (line);	/* check for illegal input */
 }
 
 
