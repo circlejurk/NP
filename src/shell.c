@@ -42,7 +42,7 @@ void set_pipes_out (int *pipefd, int *stdfd, int index, int progc);
 void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
 
 
-int shell (void)
+void shell (void)
 {
 	int	connection = 1, progc, stdfd[2];
 	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 4];
@@ -74,8 +74,6 @@ int shell (void)
 			clear_cmds (progc, cmds);
 		}
 	}
-
-	return 0;
 }
 
 void execute_one_line (int progc, char **cmds, int *stdfd, int *connection)
@@ -85,7 +83,11 @@ void execute_one_line (int progc, char **cmds, int *stdfd, int *connection)
 	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
 	for (i = 0; i < progc; ++i) {
 		/* create a pipe */
-		create_pipe (pipefd);
+		if (pipe(pipefd) < 0) {
+			fputs ("server error: failed to create pipes\n", stderr);
+			*connection = 0;
+			return;
+		}
 
 		/* parse the input command into argv */
 		argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
@@ -99,7 +101,6 @@ void execute_one_line (int progc, char **cmds, int *stdfd, int *connection)
 			setupenv (argc, argv);
 		} else if ((childpid = fork()) < 0) {
 			fputs ("server error: fork failed\n", stderr);
-			exit (1);
 		} else if (childpid == 0) {
 			set_pipes_out (pipefd, stdfd, i, progc);
 			open_files (in_file, out_file);
@@ -157,25 +158,25 @@ void save_stdfds (int *stdfd)
 	stdfd[1] = dup (STDOUT_FILENO);
 }
 
-void create_pipe (int *pipefd)
-{
-	if (pipe(pipefd) < 0) {
-		fputs ("server error: failed to create pipes\n", stderr);
-		exit (1);
-	}
-}
-
 void open_files (const char *in_file, const char *out_file)
 {
 	int infd, outfd;
 	if (in_file) {
 		infd = open (in_file, O_RDONLY, 0);
+		if (infd < 0) {
+			fprintf (stderr, "server error: cannot open file %s\n", in_file);
+			exit (1);
+		}
 		close (STDIN_FILENO);
 		dup (infd);
 		close (infd);
 	}
 	if (out_file) {
 		outfd = open (out_file, O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+		if (outfd < 0) {
+			fprintf (stderr, "server error: cannot open file %s\n", out_file);
+			exit (1);
+		}
 		close (STDOUT_FILENO);
 		dup (outfd);
 		close (outfd);
@@ -188,9 +189,10 @@ int readline (char *line, int *connection)
 	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
 	if (ferror (stdin)) {
 		fputs ("server error: read failed\n", stderr);
-		exit (1);
+		return -1;
 	} else if (feof (stdin) && p == (char *)0) {	/* EOF, no data was read */
-		exit (0);
+		*connection = 0;
+		return -1;
 	} else if (feof (stdin)) {			/* EOF, some data was read */
 		*connection = 0;
 	}

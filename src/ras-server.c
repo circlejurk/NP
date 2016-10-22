@@ -2,7 +2,11 @@
 #include <stdlib.h>
 #include <strings.h>
 #include <unistd.h>
+#define __USE_POSIX
+#include <signal.h>
+#undef __USE_POSIX
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -10,14 +14,23 @@
 #define SERV_TCP_PORT	9527
 
 
-int shell (void);
+void shell (void);
+
+void wait_sig_handler (int signo)
+{
+	if (signo == SIGUSR1)
+		waitpid (-1, NULL, WNOHANG);
+}
 
 int main (void)
 {
 	int			sockfd, newsockfd;
 	socklen_t		clilen;
-	pid_t			childpid;
+	pid_t			childpid, ppid = getpid();
 	struct sockaddr_in	cli_addr, serv_addr;
+
+	/* establish a handler for waiting the child processes */
+	signal (SIGUSR1, wait_sig_handler);
 
 	/* open a TCP socket */
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -62,9 +75,11 @@ int main (void)
 			close (sockfd);
 			close (newsockfd);
 			shell ();
+			/*kill (ppid, SIGUSR1);*/
 			exit (0);
 		}
 		close (newsockfd);
+		waitpid (-1, NULL, WNOHANG);
 	}
 
 	return 0;
