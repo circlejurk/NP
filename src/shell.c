@@ -25,7 +25,7 @@ const char prompt[] = "% ";
 
 void check_illegal (const char *line);
 void readline (char *line, int *connection);
-void printenv (const char *name);
+void printenv (int argc, char **argv);
 void open_files (const char *in_file, const char *out_file);
 void save_stdfds (int *stdfd);
 void create_pipes (int *pipefd);
@@ -79,8 +79,7 @@ int shell (void)
 			if (*argv != NULL && strcmp (*argv, "exit") == 0) {
 				connection = 0;
 			} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
-				if (argc == 2)
-					printenv (argv[1]);
+				printenv (argc, argv);
 			} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
 				if (argc == 3)
 					setenv (argv[1], argv[2], 1);
@@ -206,18 +205,34 @@ void check_illegal (const char *line)
 	}
 }
 
-void printenv (const char *name)
+void printenv (int argc, char **argv)
 {
-	char *value = getenv (name), *out;
-	if (value == NULL)
-		return;
-	out = malloc (strlen(name) + 1 + strlen(value) + 1);
-	strncpy (out, name, strlen(name));
-	strncpy (out + strlen(name), "=", 1);
-	strncpy (out + strlen(name) + 1, value, strlen(value));
-	strncpy (out + strlen(name) + 1 + strlen(value), "\n", 1);
-	write (STDOUT_FILENO, out, strlen(name) + 1 + strlen(value) + 1);
-	free (out);
+	int i;
+	if (argc == 1) {
+		for (i = 0; environ[i] != NULL; ++i) {
+			char *out;
+			out = malloc (strlen(environ[i]) + 2);
+			strcpy (out, environ[i]);
+			strcpy (out + strlen(environ[i]), "\n");
+			write (STDOUT_FILENO, out, strlen(out));
+			free (out);
+		}
+	} else {
+		for (i = 1; i < argc; ++i) {
+			char *value = getenv (argv[i]), *out;
+			if (value == NULL) {
+				fprintf (stderr, "\"%s\" does not exist\n", argv[i]);
+			} else {
+				out = malloc (strlen(argv[i]) + 1 + strlen(value) + 2);
+				strcpy (out, argv[i]);
+				strcpy (out + strlen(argv[i]), "=");
+				strcpy (out + strlen(argv[i]) + 1, value);
+				strcpy (out + strlen(argv[i]) + 1 + strlen(value), "\n");
+				write (STDOUT_FILENO, out, strlen(out));
+				free (out);
+			}
+		}
+	}
 }
 
 int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
@@ -230,14 +245,14 @@ int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 		if (strcmp (arg, ">") == 0) {
 			arg = strtok (NULL, " \r\n");
 			*out_file = malloc (strlen(arg) + 1);
-			strncpy (*out_file, arg, strlen(arg) + 1);
+			strcpy (*out_file, arg);
 		} else if (strcmp (arg, "<") == 0) {
 			arg = strtok (NULL, " \r\n");
 			*in_file = malloc (strlen(arg) + 1);
-			strncpy (*in_file, arg, strlen(arg) + 1);
+			strcpy (*in_file, arg);
 		} else {
 			argv[argc] = malloc (strlen(arg) + 1);
-			strncpy (argv[argc], arg, strlen(arg) + 1);
+			strcpy (argv[argc], arg);
 			++argc;
 		}
 		arg = strtok (NULL, " \r\n");
@@ -266,7 +281,7 @@ int line_to_cmds (char *line, char **cmds)
 	cmd = strtok (line, "|\r\n");
 	while (cmd != NULL ) {
 		cmds[progc] = malloc (strlen(cmd) + 1);
-		strncpy (cmds[progc], cmd, strlen(cmd) + 1);
+		strcpy (cmds[progc], cmd);
 		++progc;
 		cmd = strtok (NULL, "|\r\n");
 	}
