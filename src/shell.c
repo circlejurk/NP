@@ -30,8 +30,11 @@ int readline (char *line, int *connection);
 int check_illegal (char *line);
 int arespace (char *s);
 
-void set_npipe (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec, int *connection);
+void np_countdown (int *pndx);
+void set_np_in (int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec);
+void set_np_out (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec, int *connection);
 int isnumber (char *s);
+void close_np (int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
@@ -51,7 +54,7 @@ void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
 void shell (void)
 {
 	int	connection = 1, progc, stdfd[3];
-	int	pipefd[MAX_PIPE + 1][2], pndx[MAX_PIPE] = {0}, pipec = 1;
+	int	pipefd[MAX_PIPE + 1][2], pndx[MAX_PIPE + 1] = {0}, pipec = 1;
 	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 4];
 
 	/* initialize the environment variables */
@@ -70,8 +73,11 @@ void shell (void)
 			/* save original fds */
 			save_stdfds (stdfd);
 
-			/* set up the numbered pipe if exists */
-			set_npipe (line, pipefd, pndx, &pipec, &connection);
+			/* add new numbered pipe and set up to output */
+			set_np_out (line, pipefd, pndx, &pipec, &connection);
+
+			/* set up the input from numbered pipe */
+			set_np_in (pipefd, pndx, &pipec);
 
 			/* parse the total input line into commands seperated by pipes */
 			progc = line_to_cmds (line, cmds);
@@ -84,27 +90,45 @@ void shell (void)
 
 			/* free the allocated space of commands */
 			clear_cmds (progc, cmds);
+
+			/* shift all the pndx by one (count down timer) */
+			np_countdown (pndx);
+		} else {
+			/* close numbered pipe for illegal input */
+			close_np (pipefd, pndx, &pipec);
 		}
 	}
 }
 
-void set_npipe (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec, int *connection)
+void close_np (int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec)
 {
-	int i, number;
+	if (pndx[0] != 0) {
+		close (pipefd[pndx[0]][1]);
+		close (pipefd[pndx[0]][0]);
+	}
+}
 
-	/* shift all the pndx by one (count down timer) */
-	for (i = 0; i < MAX_PIPE - 1; ++i)
+void np_countdown (int *pndx)
+{
+	int i;
+	for (i = 0; i < MAX_PIPE; ++i)
 		pndx[i] = pndx[i + 1];
 	pndx[MAX_PIPE] = 0;
+}
 
-	/* set up the input from pipe */
+void set_np_in (int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec)
+{
 	if (pndx[0] != 0) {
 		close (pipefd[pndx[0]][1]);
 		close (STDIN_FILENO);
 		dup (pipefd[pndx[0]][0]);
 		close (pipefd[pndx[0]][0]);
-		--(*pipec);
 	}
+}
+
+void set_np_out (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec, int *connection)
+{
+	int i, number;
 
 	/* find the numbered pipe in the current input line and add it in */
 	for (i = 0; line[i] != 0; ++i) {
@@ -119,7 +143,7 @@ void set_npipe (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec, 
 					fputs ("server error: failed to create numbered pipes\n", stderr);
 					*connection = 0;
 				}
-				++(*pipec);
+				(*pipec) = (*pipec) % (MAX_PIPE) + 1;
 			}
 
 			/* set up the output to pipe */
