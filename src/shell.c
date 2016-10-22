@@ -31,10 +31,10 @@ int check_illegal (char *line);
 int arespace (char *s);
 
 void np_countdown (int *pndx);
-void set_np_in (int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec);
+void set_np_in (int pipefd[MAX_PIPE + 1][2], int *pndx);
 void set_np_out (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec, int *connection);
 int isnumber (char *s);
-void close_np (int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec);
+void close_np (int pipefd[MAX_PIPE + 1][2], int *pndx);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
@@ -77,7 +77,7 @@ void shell (void)
 			set_np_out (line, pipefd, pndx, &pipec, &connection);
 
 			/* set up the input from numbered pipe */
-			set_np_in (pipefd, pndx, &pipec);
+			set_np_in (pipefd, pndx);
 
 			/* parse the total input line into commands seperated by pipes */
 			progc = line_to_cmds (line, cmds);
@@ -95,12 +95,12 @@ void shell (void)
 			np_countdown (pndx);
 		} else {
 			/* close numbered pipe for illegal input */
-			close_np (pipefd, pndx, &pipec);
+			close_np (pipefd, pndx);
 		}
 	}
 }
 
-void close_np (int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec)
+void close_np (int pipefd[MAX_PIPE + 1][2], int *pndx)
 {
 	if (pndx[0] != 0) {
 		close (pipefd[pndx[0]][1]);
@@ -116,7 +116,7 @@ void np_countdown (int *pndx)
 	pndx[MAX_PIPE] = 0;
 }
 
-void set_np_in (int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec)
+void set_np_in (int pipefd[MAX_PIPE + 1][2], int *pndx)
 {
 	if (pndx[0] != 0) {
 		close (pipefd[pndx[0]][1]);
