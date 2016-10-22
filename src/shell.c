@@ -28,8 +28,9 @@ void readline (char *line, int *connection);
 void printenv (const char *name);
 void open_files (const char *in_file, const char *out_file);
 void create_pipes (int **pipefd_p, int num);
-void set_pipes (int *pipefd, int index, int progc);
-void close_pipes (int *pipefd, int num);
+void set_pipes (int **pipefd_p, int index, int progc);
+void close_pipes (int **pipefd_p, int index, int progc);
+void clear_pipes (int **pipefd_p);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
@@ -85,7 +86,7 @@ int shell (void)
 				exit (1);
 			} else if (childpid == 0) {
 				/* set up pipefds if needed */
-				set_pipes (pipefd, i, progc);
+				set_pipes (&pipefd, i, progc);
 
 				/* open files if redirections are used */
 				open_files (in_file, out_file);
@@ -95,10 +96,8 @@ int shell (void)
 				fprintf (stderr, "Unknown command: [%s]\n", *argv);
 				exit (1);
 			} else {
-				if (i != 0)
-					close (pipefd[2 * (i - 1)]);
-				if (i != progc - 1)
-					close (pipefd[2 * i + 1]);
+				/* parent closes unused pipes */
+				close_pipes (&pipefd, i, progc);
 				wait (NULL);
 			}
 
@@ -106,8 +105,8 @@ int shell (void)
 			clear_argv (argc, argv, &in_file, &out_file);
 		}
 
-		/* close inline pipes */
-		close_pipes (pipefd, progc - 1);
+		/* free the allocated space for pipes */
+		clear_pipes (&pipefd);
 
 		/* free the allocated space of commands */
 		clear_cmds (progc, cmds);
@@ -116,13 +115,18 @@ int shell (void)
 	return 0;
 }
 
-void close_pipes (int *pipefd, int num)
+void clear_pipes (int **pipefd_p)
 {
-	int i;
-	for (i = 0; i < 2 * num; ++i)
-		close (pipefd[i]);
-	free (pipefd);
-	pipefd = NULL;
+	free (*pipefd_p);
+	*pipefd_p = NULL;
+}
+
+void close_pipes (int **pipefd_p, int index, int progc)
+{
+	if (index != 0)
+		close ((*pipefd_p)[2 * (index - 1)]);
+	if (index != progc - 1)
+		close ((*pipefd_p)[2 * index + 1]);
 }
 
 void create_pipes (int **pipefd_p, int num)
@@ -137,19 +141,20 @@ void create_pipes (int **pipefd_p, int num)
 	}
 }
 
-void set_pipes (int *pipefd, int index, int progc)
+void set_pipes (int **pipefd_p, int index, int progc)
 {
 	int i;
 	if (index != 0) {
 		close (STDIN_FILENO);
-		dup (pipefd[2 * (index - 1)]);
+		dup ((*pipefd_p)[2 * (index - 1)]);
 	}
 	if (index != progc - 1) {
 		close (STDOUT_FILENO);
-		dup (pipefd[2 * index + 1]);
+		dup ((*pipefd_p)[2 * index + 1]);
 	}
 	for (i = 0; i < 2 * (progc - 1); ++i)
-		close (pipefd[i]);
+		close ((*pipefd_p)[i]);
+	clear_pipes (pipefd_p);
 }
 
 void open_files (const char *in_file, const char *out_file)
