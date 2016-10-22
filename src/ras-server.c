@@ -16,21 +16,12 @@
 
 void shell (void);
 
-void wait_sig_handler (int signo)
-{
-	if (signo == SIGUSR1)
-		waitpid (-1, NULL, WNOHANG);
-}
-
 int main (void)
 {
 	int			sockfd, newsockfd;
 	socklen_t		clilen;
-	pid_t			childpid/*, ppid = getpid()*/;
+	pid_t			childpid;
 	struct sockaddr_in	cli_addr, serv_addr;
-
-	/* establish a handler for waiting the child processes */
-	signal (SIGUSR1, wait_sig_handler);
 
 	/* open a TCP socket */
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -70,16 +61,25 @@ int main (void)
 			fputs ("server error: fork failed\n", stderr);
 			exit (1);
 		} else if (childpid == 0) {
-			close (STDIN_FILENO);	close (STDOUT_FILENO);	close (STDERR_FILENO);
-			dup (newsockfd);	dup (newsockfd);	dup (newsockfd);
-			close (sockfd);
-			close (newsockfd);
-			shell ();
-			/*kill (ppid, SIGUSR1);*/
+			if ((childpid = fork ()) < 0) {
+				fputs ("server error: fork failed\n", stderr);
+				exit (1);
+			} else if (childpid == 0) {
+				close (STDIN_FILENO);
+				close (STDOUT_FILENO);
+				close (STDERR_FILENO);
+				dup (newsockfd);
+				dup (newsockfd);
+				dup (newsockfd);
+				close (sockfd);
+				close (newsockfd);
+				shell ();
+				exit (0);
+			}
 			exit (0);
 		}
 		close (newsockfd);
-		waitpid (-1, NULL, WNOHANG);
+		wait (NULL);
 	}
 
 	return 0;
