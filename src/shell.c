@@ -23,29 +23,29 @@ const char motd[] = "****************************************\n"
 		    "****************************************\n\n";
 const char prompt[] = "% ";
 
-void check_illegal (const char *line);
-void readline (char *line, int *connection);
-void printenv (int argc, char **argv);
-void open_files (const char *in_file, const char *out_file);
 void save_stdfds (int *stdfd);
-void create_pipes (int *pipefd);
-void set_pipes_out (int *pipefd, int *stdfd, int index, int progc);
-void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
+int readline (char *line, int *connection);
+int check_illegal (const char *line);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
 
+void execute_one_line (int progc, char **cmds, int *stdfd, int *connection);
+void create_pipe (int *pipefd);
 int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file);
 void clear_argv (int argc, char **argv, char **in_file, char **out_file);
 
-void execute (char **argv);
+void printenv (int argc, char **argv);
+void setupenv (int argc, char **argv);
+void open_files (const char *in_file, const char *out_file);
+void set_pipes_out (int *pipefd, int *stdfd, int index, int progc);
+void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
+
 
 int shell (void)
 {
-	pid_t	childpid;
-	int	i, connection = 1, argc, progc, stdfd[2];
+	int	connection = 1, progc, stdfd[2];
 	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 4];
-	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
 
 	/* initialize the environment variables */
 	clearenv ();
@@ -62,52 +62,67 @@ int shell (void)
 		write (STDOUT_FILENO, prompt, sizeof(prompt));
 
 		/* read one line from client input */
-		readline (line, &connection);
+		if (readline (line, &connection) == 0) {
 
-		/* parse the total input line into commands seperated by pipes */
-		progc = line_to_cmds (line, cmds);
+			/* parse the total input line into commands seperated by pipes */
+			progc = line_to_cmds (line, cmds);
 
-		for (i = 0; i < progc; ++i) {
-			int pipefd[2];
+			/* execute one line command */
+			execute_one_line (progc, cmds, stdfd, &connection);
 
-			create_pipes (pipefd);
-
-			/* parse the input command into argv */
-			argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
-
-			/* execute the command accordingly */
-			if (*argv != NULL && strcmp (*argv, "exit") == 0) {
-				connection = 0;
-			} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
-				printenv (argc, argv);
-			} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
-				if (argc == 3)
-					setenv (argv[1], argv[2], 1);
-			} else if ((childpid = fork()) < 0) {
-				fputs ("server error: fork failed\n", stderr);
-				exit (1);
-			} else if (childpid == 0) {
-				set_pipes_out (pipefd, stdfd, i, progc);
-
-				/* open files if redirections are used */
-				open_files (in_file, out_file);
-
-				/* exec the program */
-				execute (argv);
-			} else {
-				set_pipes_in (pipefd, stdfd, i, progc);
-				wait (NULL);
-			}
-
-			/* free the allocated space of one command */
-			clear_argv (argc, argv, &in_file, &out_file);
+			/* free the allocated space of commands */
+			clear_cmds (progc, cmds);
 		}
-
-		/* free the allocated space of commands */
-		clear_cmds (progc, cmds);
 	}
 
 	return 0;
+}
+
+void execute_one_line (int progc, char **cmds, int *stdfd, int *connection)
+{
+	pid_t	childpid;
+	int	i, argc, pipefd[2];
+	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
+	for (i = 0; i < progc; ++i) {
+		/* create a pipe */
+		create_pipe (pipefd);
+
+		/* parse the input command into argv */
+		argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
+
+		/* execute the command accordingly */
+		if (*argv != NULL && strcmp (*argv, "exit") == 0) {
+			*connection = 0;
+		} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
+			printenv (argc, argv);
+		} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
+			setupenv (argc, argv);
+		} else if ((childpid = fork()) < 0) {
+			fputs ("server error: fork failed\n", stderr);
+			exit (1);
+		} else if (childpid == 0) {
+			set_pipes_out (pipefd, stdfd, i, progc);
+			open_files (in_file, out_file);
+			execvpe (*argv, argv, environ);
+			fprintf (stderr, "Unknown command: [%s]\n", *argv);
+			exit (1);
+		} else {
+			set_pipes_in (pipefd, stdfd, i, progc);
+			wait (NULL);
+		}
+
+		/* free the allocated space of one command */
+		clear_argv (argc, argv, &in_file, &out_file);
+	}
+}
+
+void setupenv (int argc, char **argv)
+{
+	if (argc == 3) {
+		if (setenv (argv[1], argv[2], 1) < 0)
+			fputs ("server error: setenv() failed\n", stderr);
+	} else
+		fputs ("Usage: setenv <name> <value>\n", stderr);
 }
 
 void set_pipes_out (int *pipefd, int *stdfd, int index, int progc)
@@ -142,14 +157,7 @@ void save_stdfds (int *stdfd)
 	stdfd[1] = dup (STDOUT_FILENO);
 }
 
-void execute (char **argv)
-{
-	execvpe (*argv, argv, environ);
-	fprintf (stderr, "Unknown command: [%s]\n", *argv);
-	exit (1);
-}
-
-void create_pipes (int *pipefd)
+void create_pipe (int *pipefd)
 {
 	if (pipe(pipefd) < 0) {
 		fputs ("server error: failed to create pipes\n", stderr);
@@ -174,7 +182,7 @@ void open_files (const char *in_file, const char *out_file)
 	}
 }
 
-void readline (char *line, int *connection)
+int readline (char *line, int *connection)
 {
 	char *p;
 	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
@@ -186,23 +194,24 @@ void readline (char *line, int *connection)
 	} else if (feof (stdin)) {			/* EOF, some data was read */
 		*connection = 0;
 	}
-	check_illegal (line);	/* check for illegal input */
+	return check_illegal (line);	/* check for illegal input */
 }
 
 
-void check_illegal (const char *line)
+int check_illegal (const char *line)
 {
 	int i = 0;
 	while (line[i] != 0) {
 		if (line[i] == '/') {
 			fputs ("input error: character '/' is not permitted\n", stderr);
-			exit (1);
+			return -1;
 		} else if ( line[i] == '|' && ! isdigit (line[i+1]) && ! isspace (line[i+1]) ) {
 			fprintf (stderr, "input error: \"%c%c\" cannot be recognized\n", line[i], line[i+1]);
-			exit (1);
+			return -1;
 		}
 		++i;
 	}
+	return 0;
 }
 
 void printenv (int argc, char **argv)
