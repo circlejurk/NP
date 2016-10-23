@@ -51,7 +51,7 @@ void set_pipes_out (int *pipefd, int *stdfd, int index, int progc);
 void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
 
 
-void shell (void)
+int shell (void)
 {
 	int	connection = 1, progc, stdfd[3];
 	int	pipefd[MAX_PIPE + 1][2], pndx[MAX_PIPE + 1] = {0}, pipec = 1;
@@ -64,7 +64,7 @@ void shell (void)
 	/* print the welcome message */
 	write (STDOUT_FILENO, motd, sizeof(motd));
 
-	while (connection) {
+	while (connection > 0) {
 		/* show the prompt */
 		write (STDOUT_FILENO, prompt, sizeof(prompt));
 
@@ -98,6 +98,8 @@ void shell (void)
 			close_np (pipefd, pndx);
 		}
 	}
+
+	return connection;
 }
 
 void close_np (int pipefd[MAX_PIPE + 1][2], int *pndx)
@@ -163,7 +165,7 @@ void set_np_out (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec,
 void execute_one_line (int progc, char **cmds, int *connection)
 {
 	pid_t	childpid;
-	int	i, argc, pipefd[2], stdfd[3];
+	int	i, argc, pipefd[2], stdfd[3], stat;
 	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
 
 	/* save original fds */
@@ -194,10 +196,13 @@ void execute_one_line (int progc, char **cmds, int *connection)
 			open_files (in_file, out_file);
 			execvpe (*argv, argv, environ);
 			fprintf (stderr, "Unknown command: [%s]\n", *argv);
-			exit (1);
+			*connection = -1;
+			i = progc;
 		} else {
 			set_pipes_in (pipefd, stdfd, i, progc);
-			wait (NULL);
+			wait (&stat);
+			if (stat != 0)
+				i = progc;
 		}
 
 		/* free the allocated space of one command */

@@ -14,7 +14,7 @@
 #define SERV_TCP_PORT	9527
 
 
-void shell (void);
+int shell (void);
 
 int main (void)
 {
@@ -75,8 +75,7 @@ int main (void)
 				dup (newsockfd);
 				close (sockfd);
 				close (newsockfd);
-				shell ();
-				exit (0);
+				exit (shell ());
 			}
 			exit (0);
 		}
