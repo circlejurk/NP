@@ -8,7 +8,6 @@ TARGET=ras-server
 
 BUILD_DIR=build
 SRC_DIR=src
-INCLUDE_DIR=include
 
 CC=gcc
 CFLAGS=-c -Wall -Wextra -Wpedantic -O3 -ansi
