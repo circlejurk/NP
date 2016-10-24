@@ -21,7 +21,7 @@
 
 const char motd[] = "****************************************\n"
 		    "** Welcome to the information server. **\n"
-		    "****************************************\n";
+		    "****************************************\n\n";
 const char prompt[] = "% ";
 
 void save_stdfds (int *stdfd);
