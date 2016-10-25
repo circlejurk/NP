@@ -62,11 +62,11 @@ int shell (void)
 	putenv ("PATH=bin:.");
 
 	/* print the welcome message */
-	write (STDOUT_FILENO, motd, sizeof(motd) - 1);
+	write (STDOUT_FILENO, motd, strlen(motd));
 
 	while (connection > 0) {
 		/* show the prompt */
-		write (STDOUT_FILENO, prompt, sizeof(prompt) - 1);
+		write (STDOUT_FILENO, prompt, strlen(prompt));
 
 		/* read one line from client input */
 		if (readline (line, &connection) == 0) {
