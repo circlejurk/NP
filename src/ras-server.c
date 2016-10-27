@@ -5,6 +5,7 @@
 #define __USE_POSIX
 #include <signal.h>
 #undef __USE_POSIX
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
@@ -13,8 +14,8 @@
 
 #define SERV_TCP_PORT	9527
 
-
 int shell (void);
+void reaper (int sig);
 
 int main (void)
 {
@@ -24,6 +25,9 @@ int main (void)
 	struct sockaddr_in	cli_addr, serv_addr;
 
 	chdir ("/u/cs/103/0310004/ras");
+
+	/* establish a signal handler for SIGCHLD */
+	signal (SIGCHLD, reaper);
 
 	/* open a TCP socket */
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -54,6 +58,8 @@ int main (void)
 		clilen = sizeof(cli_addr);
 		newsockfd = accept (sockfd, (struct sockaddr *)&cli_addr, &clilen);
 		if (newsockfd < 0) {
+			if (errno == EINTR)
+				continue;
 			fputs ("server error: accept failed\n", stderr);
 			exit (1);
 		}
@@ -63,25 +69,24 @@ int main (void)
 			fputs ("server error: fork failed\n", stderr);
 			exit (1);
 		} else if (childpid == 0) {
-			if ((childpid = fork ()) < 0) {
-				fputs ("server error: fork failed\n", stderr);
-				exit (1);
-			} else if (childpid == 0) {
-				close (STDIN_FILENO);
-				close (STDOUT_FILENO);
-				close (STDERR_FILENO);
-				dup (newsockfd);
-				dup (newsockfd);
-				dup (newsockfd);
-				close (sockfd);
-				close (newsockfd);
-				exit (shell ());
-			}
-			exit (0);
+			close (STDIN_FILENO);
+			close (STDOUT_FILENO);
+			close (STDERR_FILENO);
+			dup (newsockfd);
+			dup (newsockfd);
+			dup (newsockfd);
+			close (sockfd);
+			close (newsockfd);
+			exit (shell ());
 		}
 		close (newsockfd);
-		wait (NULL);
 	}
 
 	return 0;
+}
+
+void reaper (int sig)
+{
+	while (waitpid (-1, NULL, WNOHANG) > 0);
+	signal (sig, reaper);
 }
