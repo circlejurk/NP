@@ -24,17 +24,21 @@ const char motd[] =	"****************************************\n"
 			"****************************************\n\n";
 const char prompt[] = "% ";
 
+typedef struct numbered_pipe {
+	int	*fd;
+} Npipe;
+
 void save_stdfds (int *stdfd);
 void restore_stdfds (int *stdfd);
 int readline (char *line, int *connection);
 int check_illegal (char *line);
 int arespace (char *s);
 
-void np_countdown (int *pndx);
-void set_np_in (int pipefd[MAX_PIPE + 1][2], int *pndx);
-void set_np_out (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec, int *connection);
+void np_countdown (Npipe np[MAX_PIPE]);
+void set_np_in (Npipe np[MAX_PIPE]);
+void set_np_out (char *line, Npipe np[MAX_PIPE], int *connection);
 int isnumber (char *s);
-void close_np (int pipefd[MAX_PIPE + 1][2], int *pndx);
+void close_np (Npipe np[MAX_PIPE]);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
@@ -54,8 +58,8 @@ void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
 int shell (void)
 {
 	int	connection = 1, progc, stdfd[3];
-	int	pipefd[MAX_PIPE + 1][2], pndx[MAX_PIPE + 1] = {0}, pipec = 1;
 	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 4];
+	Npipe	np[MAX_PIPE] = {NULL};
 
 	/* initialize the environment variables */
 	clearenv ();
@@ -74,10 +78,10 @@ int shell (void)
 			save_stdfds (stdfd);
 
 			/* add new numbered pipe and set up to output */
-			set_np_out (line, pipefd, pndx, &pipec, &connection);
+			set_np_out (line, np, &connection);
 
 			/* set up the input from numbered pipe */
-			set_np_in (pipefd, pndx);
+			set_np_in (np);
 
 			/* parse the total input line into commands seperated by pipes */
 			progc = line_to_cmds (line, cmds);
@@ -90,45 +94,47 @@ int shell (void)
 
 			/* free the allocated space of commands */
 			clear_cmds (progc, cmds);
-
-			/* shift all the pndx by one (count down timer) */
-			np_countdown (pndx);
 		} else {
 			/* close numbered pipe for illegal input */
-			close_np (pipefd, pndx);
+			close_np (np);
 		}
+
+		/* shift all the pndx by one (count down timer) */
+		np_countdown (np);
 	}
 
 	return connection;
 }
 
-void close_np (int pipefd[MAX_PIPE + 1][2], int *pndx)
+void close_np (Npipe np[MAX_PIPE])
 {
-	if (pndx[0] != 0) {
-		close (pipefd[pndx[0]][1]);
-		close (pipefd[pndx[0]][0]);
+	if (np[0].fd) {
+		close (np[0].fd[1]);
+		close (np[0].fd[0]);
+		free (np[0].fd);
 	}
 }
 
-void np_countdown (int *pndx)
+void np_countdown (Npipe np[MAX_PIPE])
 {
 	int i;
-	for (i = 0; i < MAX_PIPE; ++i)
-		pndx[i] = pndx[i + 1];
-	pndx[MAX_PIPE] = 0;
+	for (i = 0; i < MAX_PIPE - 1; ++i)
+		np[i] = np[i + 1];
+	np[MAX_PIPE - 1].fd = NULL;
 }
 
-void set_np_in (int pipefd[MAX_PIPE + 1][2], int *pndx)
+void set_np_in (Npipe np[MAX_PIPE])
 {
-	if (pndx[0] != 0) {
-		close (pipefd[pndx[0]][1]);
+	if (np[0].fd) {
+		close (np[0].fd[1]);
 		close (STDIN_FILENO);
-		dup (pipefd[pndx[0]][0]);
-		close (pipefd[pndx[0]][0]);
+		dup (np[0].fd[0]);
+		close (np[0].fd[0]);
+		free (np[0].fd);
 	}
 }
 
-void set_np_out (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec, int *connection)
+void set_np_out (char *line, Npipe np[MAX_PIPE], int *connection)
 {
 	int i, number;
 
@@ -138,22 +144,21 @@ void set_np_out (char *line, int pipefd[MAX_PIPE + 1][2], int *pndx, int *pipec,
 			/* the pipe number */
 			number = atoi (line + i + 1);
 
-			/* create a new pipe */
-			if (pndx[number] == 0) {
-				pndx[number] = *pipec;
-				if (pipe (pipefd[*pipec]) < 0) {
+			/* create a new pipe if it has not been created */
+			if (np[number].fd == NULL) {
+				np[number].fd = (int *) malloc (2 * sizeof(int));
+				if (pipe (np[number].fd) < 0) {
 					fputs ("server error: failed to create numbered pipes\n", stderr);
 					*connection = 0;
 				}
-				(*pipec) = (*pipec) % (MAX_PIPE) + 1;
 			}
 
 			/* set up the output to pipe */
 			close (STDOUT_FILENO);
-			dup (pipefd[pndx[number]][1]);
+			dup (np[number].fd[1]);
 			if (line[i] == '!') {
 				close (STDERR_FILENO);
-				dup (pipefd[pndx[number]][1]);
+				dup (np[number].fd[1]);
 			}
 
 			line[i] = 0;
@@ -337,7 +342,7 @@ void printenv (int argc, char **argv)
 	if (argc == 1) {
 		for (i = 0; environ[i] != NULL; ++i) {
 			char *out;
-			out = malloc (strlen(environ[i]) + 2);
+			out = (char *) malloc (strlen(environ[i]) + 2);
 			strcpy (out, environ[i]);
 			strcpy (out + strlen(environ[i]), "\n");
 			write (STDOUT_FILENO, out, strlen(out));
@@ -349,7 +354,7 @@ void printenv (int argc, char **argv)
 			if (value == NULL) {
 				fprintf (stderr, "\"%s\" does not exist\n", argv[i]);
 			} else {
-				out = malloc (strlen(argv[i]) + 1 + strlen(value) + 2);
+				out = (char *) malloc (strlen(argv[i]) + 1 + strlen(value) + 2);
 				strcpy (out, argv[i]);
 				strcpy (out + strlen(argv[i]), "=");
 				strcpy (out + strlen(argv[i]) + 1, value);
@@ -370,14 +375,14 @@ int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 	while (arg != NULL) {
 		if (strcmp (arg, ">") == 0) {
 			arg = strtok (NULL, " \r\n");
-			*out_file = malloc (strlen(arg) + 1);
+			*out_file = (char *) malloc (strlen(arg) + 1);
 			strcpy (*out_file, arg);
 		} else if (strcmp (arg, "<") == 0) {
 			arg = strtok (NULL, " \r\n");
-			*in_file = malloc (strlen(arg) + 1);
+			*in_file = (char *) malloc (strlen(arg) + 1);
 			strcpy (*in_file, arg);
 		} else {
-			argv[argc] = malloc (strlen(arg) + 1);
+			argv[argc] = (char *) malloc (strlen(arg) + 1);
 			strcpy (argv[argc], arg);
 			++argc;
 		}
@@ -406,7 +411,7 @@ int line_to_cmds (char *line, char **cmds)
 
 	cmd = strtok (line, "|\r\n");
 	while (cmd != NULL ) {
-		cmds[progc] = malloc (strlen(cmd) + 1);
+		cmds[progc] = (char *) malloc (strlen(cmd) + 1);
 		strcpy (cmds[progc], cmd);
 		++progc;
 		cmd = strtok (NULL, "|\r\n");
