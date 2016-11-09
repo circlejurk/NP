@@ -69,31 +69,31 @@ csh> telnet myserver.nctu.edu.tw 7001 # the server port number
 % # All commands in Project 1 must still work!!!
 % who                           # All IDs must be distinct between 1 ~ 30.
 3       (no name)       140.113.215.62/1201          <- me
-% name ´¿¦ş°`
-*** User from 140.113.215.62/1201 is named '´¿¦ş°`'. ***
+% name æ›¾ä½£èº¬
+*** User from 140.113.215.62/1201 is named 'æ›¾ä½£èº¬'. ***
 % ls
 bin/            test.html   test1.txt   test2.txt
 *** User '(no name)' entered from 140.113.215.63/1013. ***
 % who 
-3       ´¿¦ş°`          140.113.215.62/1201          <- me
+3       æ›¾ä½£èº¬          140.113.215.62/1201          <- me
 4       (no name)       140.113.215.63/1013
-*** User from 140.113.215.63/1013 is named '¢æ¯«'. ***
+*** User from 140.113.215.63/1013 is named 'ï¼¸ç¥'. ***
 % who 
-3       ´¿¦ş°`          140.113.215.62/1201          <- me
-4       ¢æ¯«            140.113.215.63/1013
+3       æ›¾ä½£èº¬          140.113.215.62/1201          <- me
+4       ï¼¸ç¥            140.113.215.63/1013
 *** User '(no name)' entered from 140.113.215.64/1302. ***
 % who
-3       ´¿¦ş°`          140.113.215.62/1201          <- me
-4       ¢æ¯«            140.113.215.63/1013
+3       æ›¾ä½£èº¬          140.113.215.62/1201          <- me
+4       ï¼¸ç¥            140.113.215.63/1013
 5       (no name)       140.113.215.64/1302
-% yell ÀH½Ñ¨ìProject #2«ç»ò°µ¡H±Ğ±Ğ§Ú¡I
-*** (no name) yelled ***:  ¤ï¶Õ¡A§Ú¤]¨Bª¾½_¡C  :-(
-*** ¢æ¯« yelled ***:  §Ú½Şµs¡I²V®e©öªº°Õ¡I
-% tell 4 ¯«ªü¡I§Ú¯»»{¯u¡A½Ğ§i¶D§Ú°Õ¡I
-*** ¢æ¯« told you ***:  ¦nªü¡I¥J²Ó¬İ°¸¦p¦ó§âÀÉ®×°eµ¹§A¦a¡I
-*** ¢æ¯« (#4) just piped 'cat test.html >3' to ´¿¦ş°` (#3) *** 
-*** ¢æ¯« told you ***:  ªü§A¥i¥H¥Î'cat <4'§â¥Lµ¹¨q¥X¨Ó¬İ¡I
-% cat <5     #¤£¤p¤ß¥´¿ù
+% yell éš¨è«¸åˆ°Project #2æ€éº¼åšï¼Ÿæ•™æ•™æˆ‘ï¼
+*** (no name) yelled ***:  æ­¹å‹¢ï¼Œæˆ‘ä¹Ÿæ­¥çŸ¥ç¨»ã€‚  :-(
+*** ï¼¸ç¥ yelled ***:  æˆ‘è±¬ç›œï¼æ··å®¹æ˜“çš„å•¦ï¼
+% tell 4 ç¥é˜¿ï¼æˆ‘ç²‰èªçœŸï¼Œè«‹å‘Šè¨´æˆ‘å•¦ï¼
+*** ï¼¸ç¥ told you ***:  å¥½é˜¿ï¼ä»”ç´°çœ‹å¶å¦‚ä½•æŠŠæª”æ¡ˆé€çµ¦ä½ åœ°ï¼
+*** ï¼¸ç¥ (#4) just piped 'cat test.html >3' to æ›¾ä½£èº¬ (#3) *** 
+*** ï¼¸ç¥ told you ***:  é˜¿ä½ å¯ä»¥ç”¨'cat <4'æŠŠä»–çµ¦ç§€å‡ºä¾†çœ‹ï¼
+% cat <5     #ä¸å°å¿ƒæ‰“éŒ¯
 *** Error: the pipe #5->#3 does not exist yet. *** 
 % cat <4
 <!test.html>
@@ -101,11 +101,11 @@ bin/            test.html   test1.txt   test2.txt
 <BODY>This is a <b>test</b> program
 for rwg.
 </BODY>
-*** ´¿¦ş°` (#3) just received from ¢æ¯« (#4) by 'cat <4' *** 
-% tell 4 «õ¡I»]ªº­C¡I¦n´Î³á¡I
-*** ¢æ¯« told you ***:  ªü°¸ÁÙ¥i¥H§âµ{¦¡µ²ªG°eµ¹§A³á¡I
-*** ¢æ¯« (#4) just piped 'removetag0 test.html >3' to ´¿¦ş°` (#3) ***  
-*** ¢æ¯« told you ***:  ªü§AÁÙ¥i¥H¥Îµ{¦¡¦¬³á¡I¯À¯À¬İ'number <4'
+*** æ›¾ä½£èº¬ (#3) just received from ï¼¸ç¥ (#4) by 'cat <4' *** 
+% tell 4 æŒ–ï¼è’¸çš„è€¶ï¼å¥½æ£’å–”ï¼
+*** ï¼¸ç¥ told you ***:  é˜¿å¶é‚„å¯ä»¥æŠŠç¨‹å¼çµæœé€çµ¦ä½ å–”ï¼
+*** ï¼¸ç¥ (#4) just piped 'removetag0 test.html >3' to æ›¾ä½£èº¬ (#3) ***  
+*** ï¼¸ç¥ told you ***:  é˜¿ä½ é‚„å¯ä»¥ç”¨ç¨‹å¼æ”¶å–”ï¼ç´ ç´ çœ‹'number <4'
 % number <4
   1 Error: illegal tag "!test.html"
   2 
@@ -113,10 +113,10 @@ for rwg.
   4 This is a test program
   5 for ras.
   6 
-*** ´¿¦ş°` (#3) just received from ¢æ¯« (#4) by 'number <4' *** 
-% tell 4 «õ¡I§A¦n¯«³á¡I¢²¢ß¡I
-*** ¢æ¯« told you ***:  ¤£«È®ğ¡I°¸¥»¨Ó´N¬O¡ã¯«¡ã
-*** User '¢æ¯«' left. ***
+*** æ›¾ä½£èº¬ (#3) just received from ï¼¸ç¥ (#4) by 'number <4' *** 
+% tell 4 æŒ–ï¼ä½ å¥½ç¥å–”ï¼ï¼“ï¼±ï¼
+*** ï¼¸ç¥ told you ***:  ä¸å®¢æ°£ï¼å¶æœ¬ä¾†å°±æ˜¯ï½ç¥ï½
+*** User 'ï¼¸ç¥' left. ***
 % exit
 csh> 
 
@@ -142,30 +142,30 @@ csh> telnet myserver.nctu.edu.tw 7001 # the server port number
 **      removetag               (this is a simple filtering-sgml program, you write.)
 ** 
 % # All commands in Project 1 must still work!!!
-% name ¢æ¯«
-*** User from 140.113.215.63/1013 is named '¢æ¯«'. ***
+% name ï¼¸ç¥
+*** User from 140.113.215.63/1013 is named 'ï¼¸ç¥'. ***
 *** User '(no name)' entered from 140.113.215.64/1302. ***
 % who
-3       ´¿¦ş°`          140.113.215.62/1201
-4       ¢æ¯«            140.113.215.63/1013          <- me
+3       æ›¾ä½£èº¬          140.113.215.62/1201
+4       ï¼¸ç¥            140.113.215.63/1013          <- me
 5       (no name)       140.113.215.64/1302
-*** ´¿¦ş°` yelled ÀH½Ñ¨ìProject #2«ç»ò°µ¡H±Ğ±Ğ§Ú¡I
-*** (no name) yelled ***:  ¤ï¶Õ¡A§Ú¤]¨Bª¾½_¡C  :-(
-% yell §Ú½Şµs¡I²V®e©öªº°Õ¡I
-*** ´¿¦ş°` told you ***:  ¯«ªü¡I§Ú¯»»{¯u¡A½Ğ§i¶D§Ú°Õ¡I
-% tell 3 ¦nªü¡I¥J²Ó¬İ°¸¦p¦ó§âÀÉ®×°eµ¹§A¦a¡I
+*** æ›¾ä½£èº¬ yelled éš¨è«¸åˆ°Project #2æ€éº¼åšï¼Ÿæ•™æ•™æˆ‘ï¼
+*** (no name) yelled ***:  æ­¹å‹¢ï¼Œæˆ‘ä¹Ÿæ­¥çŸ¥ç¨»ã€‚  :-(
+% yell æˆ‘è±¬ç›œï¼æ··å®¹æ˜“çš„å•¦ï¼
+*** æ›¾ä½£èº¬ told you ***:  ç¥é˜¿ï¼æˆ‘ç²‰èªçœŸï¼Œè«‹å‘Šè¨´æˆ‘å•¦ï¼
+% tell 3 å¥½é˜¿ï¼ä»”ç´°çœ‹å¶å¦‚ä½•æŠŠæª”æ¡ˆé€çµ¦ä½ åœ°ï¼
 % cat test.html >3
-*** ¢æ¯« (#4) just piped 'cat test.html >3' to ´¿¦ş°` (#3) *** 
-% tell 3 ªü§A¥i¥H¥Î'cat <4'§â¥Lµ¹¨q¥X¨Ó¬İ¡I
-*** ´¿¦ş°` (#3) just received from ¢æ¯« (#4) by 'cat <4' *** 
-*** ´¿¦ş°` told you ***:  «õ¡I»]ªº­C¡I¦n´Î³á¡I
-% tell 3 ªü°¸ÁÙ¥i¥H§âµ{¦¡µ²ªG°eµ¹§A³á¡I
+*** ï¼¸ç¥ (#4) just piped 'cat test.html >3' to æ›¾ä½£èº¬ (#3) *** 
+% tell 3 é˜¿ä½ å¯ä»¥ç”¨'cat <4'æŠŠä»–çµ¦ç§€å‡ºä¾†çœ‹ï¼
+*** æ›¾ä½£èº¬ (#3) just received from ï¼¸ç¥ (#4) by 'cat <4' *** 
+*** æ›¾ä½£èº¬ told you ***:  æŒ–ï¼è’¸çš„è€¶ï¼å¥½æ£’å–”ï¼
+% tell 3 é˜¿å¶é‚„å¯ä»¥æŠŠç¨‹å¼çµæœé€çµ¦ä½ å–”ï¼
 % removetag0 test.html >3
-*** ¢æ¯« (#4) just piped 'removetag0 test.html >3' to ´¿¦ş°` (#3) ***  
-% tell 3 ªü§AÁÙ¥i¥H¥Îµ{¦¡¦¬³á¡I¯À¯À¬İ'number <4'
-*** ´¿¦ş°` (#3) just received from ¢æ¯« (#4) by 'number <4' *** 
-*** ´¿¦ş°` told you ***:  «õ¡I§A¦n¯«³á¡I¢²¢ß¡I
-% tell 3 ¤£«È®ğ¡I°¸¥»¨Ó´N¬O¡ã¯«¡ã
+*** ï¼¸ç¥ (#4) just piped 'removetag0 test.html >3' to æ›¾ä½£èº¬ (#3) ***  
+% tell 3 é˜¿ä½ é‚„å¯ä»¥ç”¨ç¨‹å¼æ”¶å–”ï¼ç´ ç´ çœ‹'number <4'
+*** æ›¾ä½£èº¬ (#3) just received from ï¼¸ç¥ (#4) by 'number <4' *** 
+*** æ›¾ä½£èº¬ told you ***:  æŒ–ï¼ä½ å¥½ç¥å–”ï¼ï¼“ï¼±ï¼
+% tell 3 ä¸å®¢æ°£ï¼å¶æœ¬ä¾†å°±æ˜¯ï½ç¥ï½
 % exit
 csh> 
 
