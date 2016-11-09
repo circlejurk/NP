@@ -31,7 +31,6 @@ typedef struct numbered_pipe {
 void save_stdfds (int *stdfd);
 void restore_stdfds (int *stdfd);
 int readline (char *line, int *connection);
-int check_illegal (char *line);
 int arespace (char *s);
 
 void np_countdown (Npipe np[MAX_PIPE]);
@@ -39,6 +38,7 @@ void set_np_in (Npipe np[MAX_PIPE]);
 void set_np_out (char *line, Npipe np[MAX_PIPE], int *connection);
 int isnumber (char *s);
 void close_np (Npipe np[MAX_PIPE]);
+void clear_nps (Npipe np[MAX_PIPE]);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
@@ -57,9 +57,9 @@ void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
 
 int shell (void)
 {
-	int	connection = 1, progc, stdfd[3];
+	int	connection = 1, progc, stdfd[3], readc;
 	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 4];
-	Npipe	np[MAX_PIPE] = {NULL};
+	Npipe	np[MAX_PIPE] = {0};
 
 	/* initialize the environment variables */
 	clearenv ();
@@ -71,39 +71,73 @@ int shell (void)
 	while (connection > 0) {
 		/* show the prompt */
 		write (STDOUT_FILENO, prompt, strlen(prompt));
-
 		/* read one line from client input */
-		if (readline (line, &connection) == 0) {
-			/* save original fds */
-			save_stdfds (stdfd);
-
-			/* add new numbered pipe and set up to output */
-			set_np_out (line, np, &connection);
-
-			/* set up the input from numbered pipe */
-			set_np_in (np);
-
-			/* parse the total input line into commands seperated by pipes */
-			progc = line_to_cmds (line, cmds);
-
-			/* execute one line command */
-			execute_one_line (progc, cmds, &connection);
-
-			/* restore original fds */
-			restore_stdfds (stdfd);
-
-			/* free the allocated space of commands */
-			clear_cmds (progc, cmds);
-		} else {
+		if ((readc = readline (line, &connection)) < 0) {
 			/* close numbered pipe for illegal input */
 			close_np (np);
+		} else if (readc > 0) {
+			/* save original fds */
+			save_stdfds (stdfd);
+			/* add new numbered pipe and set up to output */
+			set_np_out (line, np, &connection);
+			/* set up the input from numbered pipe */
+			set_np_in (np);
+			/* parse the total input line into commands seperated by pipes */
+			progc = line_to_cmds (line, cmds);
+			/* execute one line command */
+			execute_one_line (progc, cmds, &connection);
+			/* restore original fds */
+			restore_stdfds (stdfd);
+			/* free the allocated space of commands */
+			clear_cmds (progc, cmds);
+			/* shift all the numbered pipes by one (count down timer) */
+			np_countdown (np);
 		}
-
-		/* shift all the pndx by one (count down timer) */
-		np_countdown (np);
 	}
 
+	/* free the allocated space of numbered pipes */
+	clear_nps (np);
+
 	return connection;
+}
+
+int readline (char *line, int *connection)
+{
+	int	i;
+	char	*p = NULL;
+	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
+	if (ferror (stdin)) {
+		fputs ("read error: fgets failed\n", stderr);
+		return -1;
+	} else if (feof (stdin))	/* EOF */
+		*connection = 0;
+	if (p == NULL)		/* no data was read */
+		return 0;
+	/* check for illegal input and remove crlf */
+	for (i = 0; line[i] != 0; ++i) {
+		if (line[i] == '/') {
+			fputs ("input error: character '/' is illegal\n", stderr);
+			return -1;
+		} else if (line[i] == '\r' || line[i] == '\n') {
+			line[i] = 0;
+			line[i + 1] = 0;
+			if (arespace (line))
+				return 0;
+			break;
+		}
+	}
+	return strlen (line);
+}
+
+void clear_nps (Npipe np[MAX_PIPE])
+{
+	int	 i;
+	for (i = 0; i < MAX_PIPE; ++i) {
+		if (np[i].fd) {
+			free (np[i].fd);
+			np[i].fd = NULL;
+		}
+	}
 }
 
 void close_np (Npipe np[MAX_PIPE])
@@ -117,7 +151,7 @@ void close_np (Npipe np[MAX_PIPE])
 
 void np_countdown (Npipe np[MAX_PIPE])
 {
-	int i;
+	int	i;
 	for (i = 0; i < MAX_PIPE - 1; ++i)
 		np[i] = np[i + 1];
 	np[MAX_PIPE - 1].fd = NULL;
@@ -136,7 +170,7 @@ void set_np_in (Npipe np[MAX_PIPE])
 
 void set_np_out (char *line, Npipe np[MAX_PIPE], int *connection)
 {
-	int i, number;
+	int	i, number;
 
 	/* find the numbered pipe in the current input line and add it in */
 	for (i = 0; line[i] != 0; ++i) {
@@ -200,7 +234,7 @@ void execute_one_line (int progc, char **cmds, int *connection)
 			set_pipes_out (pipefd, stdfd, i, progc);
 			open_files (in_file, out_file);
 			execvpe (*argv, argv, environ);
-			fprintf (stderr, "Unknown command: [%s]\n", *argv);
+			fprintf (stderr, "Unknown command: [%s].\n", *argv);
 			*connection = -1;
 			i = progc;
 		} else {
@@ -275,7 +309,7 @@ void restore_stdfds (int *stdfd)
 
 void open_files (const char *in_file, const char *out_file)
 {
-	int infd, outfd;
+	int	infd, outfd;
 	if (in_file) {
 		infd = open (in_file, O_RDONLY, 0);
 		if (infd < 0) {
@@ -298,47 +332,9 @@ void open_files (const char *in_file, const char *out_file)
 	}
 }
 
-int readline (char *line, int *connection)
-{
-	char *p;
-	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
-	if (ferror (stdin)) {
-		fputs ("server error: read failed\n", stderr);
-		return -1;
-	} else if (feof (stdin) && p == (char *)0) {	/* EOF, no data was read */
-		*connection = 0;
-		return -1;
-	} else if (feof (stdin)) {			/* EOF, some data was read */
-		*connection = 0;
-	}
-	return check_illegal (line);	/* check for illegal input */
-}
-
-
-int check_illegal (char *line)
-{
-	int i;
-	for (i = 0; line[i] != 0; ++i) {
-		if (line[i] == '/') {
-			fputs ("input error: character '/' is illegal\n", stderr);
-			return -1;
-		} else if ( line[i] == '|' && ! isdigit (line[i+1]) && ! isspace (line[i+1]) ) {
-			fprintf (stderr, "input error: \"%c%c\" is illegal\n", line[i], line[i+1]);
-			return -1;
-		} else if (line[i] == '\r' || line[i] == '\n') {
-			line[i] = 0;
-			line[i + 1] = 0;
-			if (arespace (line))
-				return -1;
-			return 0;
-		}
-	}
-	return 0;
-}
-
 void printenv (int argc, char **argv)
 {
-	int i;
+	int	i;
 	if (argc == 1) {
 		for (i = 0; environ[i] != NULL; ++i) {
 			char *out;
@@ -429,7 +425,7 @@ void clear_cmds (int progc, char **cmds)
 
 int isnumber (char *s)
 {
-	int i;
+	int	i;
 	for (i = 0; s[i] != 0; ++i)
 		if (!isdigit(s[i]))
 			return 0;
@@ -438,9 +434,9 @@ int isnumber (char *s)
 
 int arespace (char *s)
 {
-	int i;
+	int	i;
 	for (i = 0; s[i] != 0; ++i)
 		if (!isspace(s[i]))
 			return 0;
-	return 1;
+	return 1;	/* empty strings are treated as spaces */
 }
