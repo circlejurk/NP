@@ -1,10 +1,9 @@
 ############################################
-# Makefile for NP project2
-#
-# kyechou (niorehkids) 2016-11-09
+# Makefile for NP projects
+# kyechou (niorehkids)
 ############################################ 
 
-TARGET=rwg-server
+TARGET=server
 
 BUILD_DIR=build
 SRC_DIR=src
