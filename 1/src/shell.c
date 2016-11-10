@@ -28,8 +28,8 @@ typedef struct numbered_pipe {
 	int	*fd;
 } Npipe;
 
-void save_stdfds (int *stdfd);
-void restore_stdfds (int *stdfd);
+void save_fds (int *stdfd);
+void restore_fds (int *stdfd);
 int readline (char *line, int *connection);
 int arespace (char *s);
 
@@ -58,7 +58,7 @@ void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
 int shell (void)
 {
 	int	connection = 1, progc, stdfd[3], readc;
-	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 4];
+	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 2];
 	Npipe	np[MAX_PIPE] = {0};
 
 	/* initialize the environment variables */
@@ -77,7 +77,7 @@ int shell (void)
 			close_np (np);
 		} else if (readc > 0) {
 			/* save original fds */
-			save_stdfds (stdfd);
+			save_fds (stdfd);
 			/* add new numbered pipe and set up to output */
 			set_np_out (line, np, &connection);
 			/* set up the input from numbered pipe */
@@ -87,7 +87,7 @@ int shell (void)
 			/* execute one line command */
 			execute_one_line (progc, cmds, &connection);
 			/* restore original fds */
-			restore_stdfds (stdfd);
+			restore_fds (stdfd);
 			/* free the allocated space of commands */
 			clear_cmds (progc, cmds);
 			/* shift all the numbered pipes by one (count down timer) */
@@ -208,7 +208,7 @@ void execute_one_line (int progc, char **cmds, int *connection)
 	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
 
 	/* save original fds */
-	save_stdfds (stdfd);
+	save_fds (stdfd);
 
 	for (i = 0; i < progc; ++i) {
 		/* create a pipe */
@@ -249,7 +249,7 @@ void execute_one_line (int progc, char **cmds, int *connection)
 	}
 
 	/* restore original fds */
-	restore_stdfds (stdfd);
+	restore_fds (stdfd);
 }
 
 void setupenv (int argc, char **argv)
@@ -287,14 +287,14 @@ void set_pipes_in (int *pipefd, int *stdfd, int index, int progc)
 	close (pipefd[1]);
 }
 
-void save_stdfds (int *stdfd)
+void save_fds (int *stdfd)
 {
 	stdfd[0] = dup (STDIN_FILENO);
 	stdfd[1] = dup (STDOUT_FILENO);
 	stdfd[2] = dup (STDERR_FILENO);
 }
 
-void restore_stdfds (int *stdfd)
+void restore_fds (int *stdfd)
 {
 	close (STDIN_FILENO);
 	dup (stdfd[0]);
