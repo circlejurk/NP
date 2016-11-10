@@ -17,11 +17,11 @@ all:	${TARGET}-single ${TARGET}-shm
 ${TARGET}-%:	${BUILD_DIR}/server-%.o ${BUILD_DIR}/shell-%.o
 	${CC} ${LFLAGS} -o $@ $^
 
-${BUILD_DIR}/server-%.o:	%/server.c
+${BUILD_DIR}/server-%.o:	${SRC_DIR}/%/server.c
 	-@[[ -d ${BUILD_DIR} ]] || mkdir ${BUILD_DIR}
 	${CC} ${CFLAGS} -o $@ $^
 
-${BUILD_DIR}/shell-%.o:	%/shell.c
+${BUILD_DIR}/shell-%.o:	${SRC_DIR}/%/shell.c
 	-@[[ -d ${BUILD_DIR} ]] || mkdir ${BUILD_DIR}
 	${CC} ${CFLAGS} -o $@ $^
 
