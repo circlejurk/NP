@@ -44,7 +44,6 @@ int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
 
 void execute_one_line (int progc, char **cmds, int *connection);
-void create_pipe (int *pipefd);
 int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file);
 void clear_argv (int argc, char **argv, char **in_file, char **out_file);
 
@@ -212,7 +211,7 @@ void execute_one_line (int progc, char **cmds, int *connection)
 
 	for (i = 0; i < progc; ++i) {
 		/* create a pipe */
-		if (pipe(pipefd) < 0) {
+		if (pipe (pipefd) < 0) {
 			fputs ("server error: failed to create pipes\n", stderr);
 			*connection = 0;
 			return;
