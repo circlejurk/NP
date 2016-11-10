@@ -14,10 +14,14 @@ LFLAGS=-static -fPIC
 
 all:	${TARGET}-single ${TARGET}-shm
 
-${TARGET}%:	${BUILD_DIR}/server%.o ${BUILD_DIR}/shell.o
+${TARGET}-%:	${BUILD_DIR}/server-%.o ${BUILD_DIR}/shell-%.o
 	${CC} ${LFLAGS} -o $@ $^
 
-${BUILD_DIR}/%.o:	${SRC_DIR}/%.c
+${BUILD_DIR}/server-%.o:	%/server.c
+	-@[[ -d ${BUILD_DIR} ]] || mkdir ${BUILD_DIR}
+	${CC} ${CFLAGS} -o $@ $^
+
+${BUILD_DIR}/shell-%.o:	%/shell.c
 	-@[[ -d ${BUILD_DIR} ]] || mkdir ${BUILD_DIR}
 	${CC} ${CFLAGS} -o $@ $^
 
