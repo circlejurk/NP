@@ -21,7 +21,7 @@ int passiveTCP (int port, int qlen);
 int main (void)
 {
 	int			msock, ssock;
-	socklen_t		clilen;
+	socklen_t		clilen = sizeof (struct sockaddr_in);
 	pid_t			childpid;
 	struct sockaddr_in	cli_addr;
 
