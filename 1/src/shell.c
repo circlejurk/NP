@@ -210,13 +210,6 @@ void execute_one_line (int progc, char **cmds, int *connection)
 	save_fds (stdfd);
 
 	for (i = 0; i < progc; ++i) {
-		/* create a pipe */
-		if (pipe (pipefd) < 0) {
-			fputs ("server error: failed to create pipes\n", stderr);
-			*connection = 0;
-			return;
-		}
-
 		/* parse the input command into argv */
 		argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
 
@@ -227,20 +220,30 @@ void execute_one_line (int progc, char **cmds, int *connection)
 			printenv (argc, argv);
 		} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
 			setupenv (argc, argv);
-		} else if ((childpid = fork()) < 0) {
-			fputs ("server error: fork failed\n", stderr);
-		} else if (childpid == 0) {
-			set_pipes_out (pipefd, stdfd, i, progc);
-			open_files (in_file, out_file);
-			execvpe (*argv, argv, environ);
-			fprintf (stderr, "Unknown command: [%s].\n", *argv);
-			*connection = -1;
-			i = progc;
 		} else {
-			set_pipes_in (pipefd, stdfd, i, progc);
-			wait (&stat);
-			if (stat != 0)
+			/* create a pipe */
+			if (pipe (pipefd) < 0) {
+				fputs ("server error: failed to create pipes\n", stderr);
+				*connection = 0;
+				return;
+			}
+			/* fork a child and exec the program */
+			if ((childpid = fork()) < 0) {
+				close (pipefd[0]); close (pipefd[1]);
+				fputs ("server error: fork failed\n", stderr);
+			} else if (childpid == 0) {
+				set_pipes_out (pipefd, stdfd, i, progc);
+				open_files (in_file, out_file);
+				execvpe (*argv, argv, environ);
+				fprintf (stderr, "Unknown command: [%s].\n", *argv);
+				*connection = -1;
 				i = progc;
+			} else {
+				set_pipes_in (pipefd, stdfd, i, progc);
+				wait (&stat);
+				if (stat != 0)
+					i = progc;
+			}
 		}
 
 		/* free the allocated space of one command */

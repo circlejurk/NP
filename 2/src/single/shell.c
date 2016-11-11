@@ -182,7 +182,7 @@ void execute_one_line (int progc, char **cmds, int *connection)
 				*connection = 0;
 				return;
 			}
-
+			/* fork a child and exec the program */
 			if ((childpid = fork()) < 0) {
 				close (pipefd[0]); close (pipefd[1]);
 				fputs ("server error: fork failed\n", stderr);
