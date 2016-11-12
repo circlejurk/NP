@@ -4,7 +4,7 @@
 #define MAX_PIPE	1000
 
 #define MAX_USERS	30
-#define NAME_SIZE	1024
+#define NAME_SIZE	256
 
 extern const char motd[], prompt[];
 

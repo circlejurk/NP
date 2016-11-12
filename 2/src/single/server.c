@@ -21,6 +21,7 @@
 
 #include "single.h"
 
+void initialize (void);
 int passiveTCP (int port, int qlen);
 void add_user (int sock, struct sockaddr_in *cli_addr, User *users);
 void rm_user (User *users);
@@ -33,18 +34,6 @@ int main (void)
 	socklen_t		clilen = sizeof (struct sockaddr_in);
 	struct sockaddr_in	cli_addr = {0};
 	User			users[MAX_USERS + 1] = {0};
-
-	/* initialize the original directory */
-	/*chdir ("/u/cs/103/0310004/rwg");*/
-
-	/* initialize the environment variables */
-	clearenv ();
-	putenv ("PATH=bin:.");
-
-	/* close the original fds */
-	close (STDIN_FILENO);
-	close (STDOUT_FILENO);
-	close (STDERR_FILENO);
 
 	/* build a TCP connection */
 	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0)
@@ -65,7 +54,7 @@ int main (void)
 			ssock = accept (msock, (struct sockaddr *)&cli_addr, &clilen);
 			if (ssock < 0)
 				return -1;
-			FD_SET (ssock, &afds);	/* add an active socket */
+			FD_SET (ssock, &afds);		/* add an active socket */
 			add_user (ssock, &cli_addr, users);	/* add a user */
 		}
 		/* handle one line command if needed */
@@ -75,8 +64,8 @@ int main (void)
 				if (users[fd].connection < 0) {
 					return -1;
 				} else if (users[fd].connection == 0) {
-					FD_CLR (fd, &afds);
-					rm_user (users + fd);
+					FD_CLR (fd, &afds);	/* remove the inactive socket */
+					rm_user (users + fd);	/* remove the user */
 				}
 			}
 		}
@@ -125,6 +114,19 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 	write (sock, motd, strlen(motd));	/* print the welcome message */
 	write (sock, prompt, strlen(prompt));	/* show the prompt */
 	/* broadcast that you're fucking in */
+}
+
+void initialize (void)
+{
+	/* initialize the original directory */
+	chdir ("/u/cs/103/0310004/rwg");
+	/* initialize the environment variables */
+	clearenv ();
+	putenv ("PATH=bin:.");
+	/* close the original fds */
+	close (STDIN_FILENO);
+	close (STDOUT_FILENO);
+	close (STDERR_FILENO);
 }
 
 int passiveTCP (int port, int qlen)
