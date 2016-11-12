@@ -28,7 +28,6 @@ int passiveTCP (int port, int qlen);
 void add_user (int sock, struct sockaddr_in *cli_addr, User *users);
 void rm_user (int sock, User *users);
 void execute (int sock, User *users);
-void broadcast (char *msg, User *users);
 
 int main (void)
 {
@@ -74,6 +73,8 @@ int main (void)
 				} else if (users[fd - 4].connection == 0) {
 					FD_CLR (fd, &afds);	/* remove the inactive socket */
 					rm_user (fd, users);	/* remove the user */
+				} else {
+					write (fd, prompt, strlen(prompt));	/* show the prompt */
 				}
 			}
 		}
@@ -91,19 +92,6 @@ void execute (int sock, User *users)
 	dup2 (sock, STDERR_FILENO);
 	shell (sock, users);
 	restore_fds (stdfd);
-	if (users[sock - 4].connection > 0)
-		write (sock, prompt, strlen(prompt));	/* show the prompt */
-}
-
-void broadcast (char *msg, User *users)
-{
-	int	idx;
-	for (idx = 0; idx < MAX_USERS; ++idx) {
-		if (users[idx].connection > 0) {
-			write (idx + 4, msg, strlen(msg));	/* print the message out */
-			write (idx + 4, prompt, strlen(prompt));	/* show the prompt */
-		}
-	}
 }
 
 void rm_user (int sock, User *users)
@@ -111,7 +99,7 @@ void rm_user (int sock, User *users)
 	char	msg[MAX_MSG_SIZE + 1];
 	/* broadcast that you're out */
 	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' left. ***\n", users[sock - 4].name);
-	broadcast (msg, users);
+	broadcast (msg, sock, users);
 	/* clear the user entry */
 	close (sock);
 	users[sock - 4].name[0] = 0;
@@ -133,7 +121,8 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 	write (sock, motd, strlen(motd));	/* print the welcome message */
 	/* broadcast that you're in */
 	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' entered from %s/%d. ***\n", users[sock - 4].name, users[sock - 4].ip, users[sock - 4].port);
-	broadcast (msg, users);
+	broadcast (msg, sock, users);
+	write (sock, prompt, strlen(prompt));	/* show the prompt */
 }
 
 void initialize (void)
@@ -175,4 +164,16 @@ int passiveTCP (int port, int qlen)
 	}
 
 	return sockfd;
+}
+
+void broadcast (char *msg, int sock, User *users)
+{
+	int	idx;
+	for (idx = 0; idx < MAX_USERS; ++idx) {
+		if (users[idx].connection > 0) {
+			write (idx + 4, msg, strlen(msg));	/* print the message out */
+			if (idx + 4 != sock)	/* show the prompt for others */
+				write (idx + 4, prompt, strlen(prompt));
+		}
+	}
 }

@@ -179,6 +179,8 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 			setupenv (argc, argv);
 		} else if (*argv != NULL && strcmp (*argv, "who") == 0) {
 			who (sock, users);
+		} else if (*argv != NULL && strcmp (*argv, "name") == 0) {
+			name (sock, users, argv[1]);
 		} else {
 			/* create a pipe */
 			if (pipe(pipefd) < 0) {
@@ -213,6 +215,14 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 	restore_fds (stdfd);
 }
 
+void name (int sock, User *users, char *new_name)
+{
+	char	msg[MAX_MSG_SIZE + 1];
+	strncpy (users[sock - 4].name, new_name, NAME_SIZE);
+	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User from %s/%d is named '%s'. ***\n", users[sock - 4].ip, users[sock - 4].port, users[sock - 4].name);
+	broadcast (msg, sock, users);
+}
+
 void who (int sock, User *users)
 {
 	int	idx;
@@ -220,7 +230,10 @@ void who (int sock, User *users)
 	write (STDOUT_FILENO, "<sockd>\t<nickname>\t<IP/port>\t\t<indicate me>\n", 44);
 	for (idx = 0; idx < MAX_USERS; ++idx) {
 		if (users[idx].connection > 0) {
-			snprintf (msg, MAX_MSG_SIZE + 1, "%d\t%s\t%s/%d", idx + 1, users[idx].name, users[idx].ip, users[idx].port);
+			if (strlen (users[idx].name) < 8)
+				snprintf (msg, MAX_MSG_SIZE + 1, "%d\t%s\t\t%s/%d", idx + 1, users[idx].name, users[idx].ip, users[idx].port);
+			else
+				snprintf (msg, MAX_MSG_SIZE + 1, "%d\t%s\t%s/%d", idx + 1, users[idx].name, users[idx].ip, users[idx].port);
 			if (idx + 4 == sock)
 				strcat (msg, "\t\t<- me\n");
 			else

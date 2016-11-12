@@ -4,7 +4,7 @@
 #define MAX_PIPE	1000
 
 #define MAX_USERS	30
-#define MAX_MSG_SIZE	128
+#define MAX_MSG_SIZE	1024
 #define NAME_SIZE	64
 
 extern const char motd[], prompt[];
@@ -21,6 +21,7 @@ typedef struct user {
 	Npipe	np[MAX_PIPE];
 } User;
 
+/* implemented in shell.c */
 int shell (int sock, User *users);
 
 void save_fds (int *stdfd);
@@ -48,3 +49,7 @@ void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
 void printenv (int argc, char **argv);
 void setupenv (int argc, char **argv);
 void who (int sock, User *users);
+void name (int sock, User *users, char *new_name);
+
+/* implemented in server.c */
+void broadcast (char *msg, int sock, User *users);
