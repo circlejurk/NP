@@ -1,12 +1,14 @@
+#include <strings.h>
+#include <string.h>
+#include <stdint.h>
+#define __USE_ISOC99
 #include <stdio.h>
+#undef __USE_ISOC99
 #define __USE_MISC
 #define __USE_XOPEN2K
 #include <stdlib.h>
 #undef __USE_MISC
 #undef __USE_XOPEN2K
-#include <strings.h>
-#include <string.h>
-#include <stdint.h>
 #ifndef __USE_MISC
 #define __USE_MISC
 #endif
@@ -24,8 +26,9 @@
 void initialize (void);
 int passiveTCP (int port, int qlen);
 void add_user (int sock, struct sockaddr_in *cli_addr, User *users);
-void rm_user (User *users);
-void execute (int fd, User *users);
+void rm_user (int sock, User *users);
+void execute (int sock, User *users);
+void broadcast (char *msg, User *users);
 
 int main (void)
 {
@@ -35,8 +38,9 @@ int main (void)
 	struct sockaddr_in	cli_addr = {0};
 	User			users[MAX_USERS + 1] = {0};
 
-	/* build a TCP connection */
-	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0)
+	initialize ();	/* server initialization */
+
+	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0)	/* build a TCP connection */
 		return -1;
 
 	/* initialize the active file descriptor set */
@@ -62,10 +66,10 @@ int main (void)
 			if (fd != msock && FD_ISSET (fd, &rfds)) {
 				execute (fd, users);
 				if (users[fd].connection < 0) {
-					return -1;
+					return -1;	/* when children exec failed */
 				} else if (users[fd].connection == 0) {
 					FD_CLR (fd, &afds);	/* remove the inactive socket */
-					rm_user (users + fd);	/* remove the user */
+					rm_user (fd, users);	/* remove the user */
 				}
 			}
 		}
@@ -74,52 +78,68 @@ int main (void)
 	return 0;
 }
 
-void execute (int fd, User *users)
+void execute (int sock, User *users)
 {
 	int	stdfd[3];
 	save_fds (stdfd);
-	dup2 (fd, STDIN_FILENO);
-	dup2 (fd, STDOUT_FILENO);
-	dup2 (fd, STDERR_FILENO);
-	shell (users + fd);
+	dup2 (sock, STDIN_FILENO);
+	dup2 (sock, STDOUT_FILENO);
+	dup2 (sock, STDERR_FILENO);
+	shell (users + sock);
 	restore_fds (stdfd);
-	if (fd == 1) {
+	if (sock == 1) {
 		dup2 (2, 0);
 		close (2);
 	}
-	write (fd, prompt, strlen(prompt));	/* show the prompt */
+	if (users[sock].connection > 0)
+		write (sock, prompt, strlen(prompt));	/* show the prompt */
 }
 
-void rm_user (User *user)
+void broadcast (char *msg, User *users)
 {
-	close (user->sock);
-	user->sock = 0;
-	user->name[0] = 0;
-	user->ip[0] = 0;
-	user->port = 0;
-	user->connection = 0;
-	clear_nps (user->np);	/* free the allocated space of numbered pipes */
-	user->np->fd = NULL;
-	/* broadcast that you're fucking out */
+	int	fd;
+	for (fd = 1; fd <= MAX_USERS; ++fd) {
+		if (users[fd].connection > 0) {
+			write (fd, msg, strlen(msg));	/* print the message out */
+			write (fd, prompt, strlen(prompt));	/* show the prompt */
+		}
+	}
+}
+
+void rm_user (int sock, User *users)
+{
+	char	msg[MAX_MSG_SIZE + 1];
+	/* broadcast that you're out */
+	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' left. ***\n", users[sock].name);
+	broadcast (msg, users);
+	/* clear the user entry */
+	close (sock);
+	users[sock].name[0] = 0;
+	users[sock].ip[0] = 0;
+	users[sock].port = 0;
+	users[sock].connection = 0;
+	clear_nps (users[sock].np);	/* free the allocated space of numbered pipes */
+	users[sock].np->fd = NULL;
 }
 
 void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 {
-	users[sock].sock = sock;
-	strcpy (users[sock].name, "no name");
+	char	msg[MAX_MSG_SIZE + 1];
+	/* initialize the user entry */
+	strcpy (users[sock].name, "(no name)");
 	strcpy (users[sock].ip, inet_ntoa (cli_addr->sin_addr));
 	users[sock].port = cli_addr->sin_port;
 	users[sock].connection = 1;
-
 	write (sock, motd, strlen(motd));	/* print the welcome message */
-	write (sock, prompt, strlen(prompt));	/* show the prompt */
-	/* broadcast that you're fucking in */
+	/* broadcast that you're in */
+	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' entered from %s/%d. ***\n", users[sock].name, users[sock].ip, users[sock].port);
+	broadcast (msg, users);
 }
 
 void initialize (void)
 {
 	/* initialize the original directory */
-	chdir ("/u/cs/103/0310004/rwg");
+	/*chdir ("/u/cs/103/0310004/rwg");*/
 	/* initialize the environment variables */
 	clearenv ();
 	putenv ("PATH=bin:.");

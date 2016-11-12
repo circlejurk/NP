@@ -4,7 +4,8 @@
 #define MAX_PIPE	1000
 
 #define MAX_USERS	30
-#define NAME_SIZE	256
+#define MAX_MSG_SIZE	256
+#define NAME_SIZE	128
 
 extern const char motd[], prompt[];
 
@@ -13,7 +14,6 @@ typedef struct numbered_pipe {
 } Npipe;
 
 typedef struct user {
-	int	sock;
 	char	name[NAME_SIZE];
 	char	ip[16];
 	int	port;
