@@ -1,5 +1,5 @@
-#include <strings.h>
 #include <string.h>
+#include <strings.h>
 #include <stdint.h>
 #define __USE_ISOC99
 #include <stdio.h>
@@ -85,7 +85,7 @@ void execute (int sock, User *users)
 	dup2 (sock, STDIN_FILENO);
 	dup2 (sock, STDOUT_FILENO);
 	dup2 (sock, STDERR_FILENO);
-	shell (users + sock);
+	shell (sock, users);
 	restore_fds (stdfd);
 	if (sock == 1) {
 		dup2 (2, 0);

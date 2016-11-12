@@ -21,7 +21,7 @@ typedef struct user {
 	Npipe	np[MAX_PIPE];
 } User;
 
-int shell (User *user);
+int shell (int sock, User *users);
 
 void save_fds (int *stdfd);
 void restore_fds (int *stdfd);
@@ -38,7 +38,7 @@ void clear_nps (Npipe np[MAX_PIPE]);
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
 
-void execute_one_line (int progc, char **cmds, int *connection);
+void execute_one_line (int progc, char **cmds, int sock, User *users);
 int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file);
 void clear_argv (int argc, char **argv, char **in_file, char **out_file);
 void open_files (const char *in_file, const char *out_file);
@@ -47,3 +47,4 @@ void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
 
 void printenv (int argc, char **argv);
 void setupenv (int argc, char **argv);
+void who (int sock, User *users);

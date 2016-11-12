@@ -1,11 +1,13 @@
+#include <string.h>
+#define __USE_ISOC99
 #include <stdio.h>
+#undef __USE_ISOC99
 #define __USE_MISC
 #define __USE_XOPEN2K
 #include <stdlib.h>
 #undef __USE_MISC
 #undef __USE_XOPEN2K
 #include <ctype.h>
-#include <string.h>
 #define __USE_GNU
 #include <unistd.h>
 #undef __USE_GNU
@@ -22,37 +24,37 @@ const char motd[] =	"****************************************\n"
 const char prompt[] = "% ";
 
 
-int shell (User *user)
+int shell (int sock, User *users)
 {
 	int	progc, stdfd[3], readc;
 	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 2];
 
-	if (user->connection > 0) {
+	if (users[sock].connection > 0) {
 		/* read one line from client input */
-		if ((readc = readline (line, &(user->connection))) < 0) {
+		if ((readc = readline (line, &(users[sock].connection))) < 0) {
 			/* close numbered pipe for illegal input */
-			close_np (user->np);
+			close_np (users[sock].np);
 		} else if (readc > 0) {
 			/* save original fds */
 			save_fds (stdfd);
 			/* add new numbered pipe and set up to output */
-			set_np_out (line, user->np, &(user->connection));
+			set_np_out (line, users[sock].np, &(users[sock].connection));
 			/* set up the input from numbered pipe */
-			set_np_in (user->np);
+			set_np_in (users[sock].np);
 			/* parse the total input line into commands seperated by pipes */
 			progc = line_to_cmds (line, cmds);
 			/* execute one line command */
-			execute_one_line (progc, cmds, &(user->connection));
+			execute_one_line (progc, cmds, sock, users);
 			/* restore original fds */
 			restore_fds (stdfd);
 			/* free the allocated space of commands */
 			clear_cmds (progc, cmds);
 			/* shift all the numbered pipes by one (count down timer) */
-			np_countdown (user->np);
+			np_countdown (users[sock].np);
 		}
 	}
 
-	return user->connection;
+	return users[sock].connection;
 }
 
 int readline (char *line, int *connection)
@@ -155,7 +157,7 @@ void set_np_out (char *line, Npipe np[MAX_PIPE], int *connection)
 	}
 }
 
-void execute_one_line (int progc, char **cmds, int *connection)
+void execute_one_line (int progc, char **cmds, int sock, User *users)
 {
 	pid_t	childpid;
 	int	i, argc, pipefd[2], stdfd[3], stat;
@@ -170,16 +172,18 @@ void execute_one_line (int progc, char **cmds, int *connection)
 
 		/* execute the command accordingly */
 		if (*argv != NULL && strcmp (*argv, "exit") == 0) {
-			*connection = 0;
+			users[sock].connection = 0;
 		} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
 			printenv (argc, argv);
 		} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
 			setupenv (argc, argv);
+		} else if (*argv != NULL && strcmp (*argv, "who") == 0) {
+			who (sock, users);
 		} else {
 			/* create a pipe */
 			if (pipe(pipefd) < 0) {
 				fputs ("server error: failed to create pipes\n", stderr);
-				*connection = 0;
+				users[sock].connection = 0;
 				return;
 			}
 			/* fork a child and exec the program */
@@ -191,7 +195,7 @@ void execute_one_line (int progc, char **cmds, int *connection)
 				open_files (in_file, out_file);
 				execvpe (*argv, argv, environ);
 				fprintf (stderr, "Unknown command: [%s].\n", *argv);
-				*connection = -1;
+				users[sock].connection = -1;
 				i = progc;
 			} else {
 				set_pipes_in (pipefd, stdfd, i, progc);
@@ -207,6 +211,25 @@ void execute_one_line (int progc, char **cmds, int *connection)
 
 	/* restore original fds */
 	restore_fds (stdfd);
+}
+
+void who (int sock, User *users)
+{
+	/*
+	int	fd;
+	char	msg[MAX_MSG_SIZE + 1];
+	write (sock, "<sockd>\t<nickname>\t<IP/port>\t\t<indicate me>\n", 44);
+	for (fd = 1; fd <= MAX_USERS; ++fd) {
+		if (users[fd].connection > 0) {
+			snprintf (msg, MAX_MSG_SIZE + 1, "%d\t%s\t%s/%d", fd, users[fd].name, users[fd].ip, users[fd].port);
+			if (fd == sock)
+				strcat (msg, "\t\t<- me\n");
+			else
+				strcat (msg, "\n");
+			write (sock, msg, strlen(msg));
+		}
+	}
+	*/
 }
 
 void setupenv (int argc, char **argv)
@@ -293,8 +316,7 @@ void printenv (int argc, char **argv)
 		for (i = 0; environ[i] != NULL; ++i) {
 			char *out;
 			out = (char *) malloc (strlen(environ[i]) + 2);
-			strcpy (out, environ[i]);
-			strcpy (out + strlen(environ[i]), "\n");
+			sprintf (out, "%s\n", environ[i]);
 			write (STDOUT_FILENO, out, strlen(out));
 			free (out);
 		}
@@ -305,10 +327,7 @@ void printenv (int argc, char **argv)
 				fprintf (stderr, "\"%s\" does not exist\n", argv[i]);
 			} else {
 				out = (char *) malloc (strlen(argv[i]) + 1 + strlen(value) + 2);
-				strcpy (out, argv[i]);
-				strcpy (out + strlen(argv[i]), "=");
-				strcpy (out + strlen(argv[i]) + 1, value);
-				strcpy (out + strlen(argv[i]) + 1 + strlen(value), "\n");
+				sprintf (out, "%s=%s\n", argv[i], value);
 				write (STDOUT_FILENO, out, strlen(out));
 				free (out);
 			}
