@@ -341,8 +341,7 @@ void printenv (int argc, char **argv)
 		for (i = 0; environ[i] != NULL; ++i) {
 			char *out;
 			out = (char *) malloc (strlen(environ[i]) + 2);
-			strcpy (out, environ[i]);
-			strcpy (out + strlen(environ[i]), "\n");
+			sprintf (out, "%s\n", environ[i]);
 			write (STDOUT_FILENO, out, strlen(out));
 			free (out);
 		}
@@ -353,10 +352,7 @@ void printenv (int argc, char **argv)
 				fprintf (stderr, "\"%s\" does not exist\n", argv[i]);
 			} else {
 				out = (char *) malloc (strlen(argv[i]) + 1 + strlen(value) + 2);
-				strcpy (out, argv[i]);
-				strcpy (out + strlen(argv[i]), "=");
-				strcpy (out + strlen(argv[i]) + 1, value);
-				strcpy (out + strlen(argv[i]) + 1 + strlen(value), "\n");
+				sprintf (out, "%s=%s\n", argv[i], value);
 				write (STDOUT_FILENO, out, strlen(out));
 				free (out);
 			}
