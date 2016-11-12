@@ -36,7 +36,7 @@ int main (void)
 	fd_set			rfds, afds;
 	socklen_t		clilen = sizeof (struct sockaddr_in);
 	struct sockaddr_in	cli_addr = {0};
-	User			users[MAX_USERS + 1] = {0};
+	User			users[MAX_USERS] = {0};
 
 	initialize ();	/* server initialization */
 
@@ -51,23 +51,27 @@ int main (void)
 		/* copy the active fds into read fds */
 		memcpy (&rfds, &afds, sizeof(rfds));
 		/* select from the rfds */
-		if (select (nfds, &rfds, NULL, NULL, NULL) < 0)
+		if (select (nfds, &rfds, NULL, NULL, NULL) < 0) {
+			fputs ("server error: select failed\n", stderr);
 			return -1;
+		}
 		/* check for new connection requests */
 		if (FD_ISSET (msock, &rfds)) {
 			ssock = accept (msock, (struct sockaddr *)&cli_addr, &clilen);
-			if (ssock < 0)
+			if (ssock < 0) {
+				fputs ("server error: accept failed\n", stderr);
 				return -1;
+			}
 			FD_SET (ssock, &afds);		/* add an active socket */
 			add_user (ssock, &cli_addr, users);	/* add a user */
 		}
 		/* handle one line command if needed */
-		for (fd = 0; fd < nfds; ++fd) {
+		for (fd = 4; fd < nfds; ++fd) {
 			if (fd != msock && FD_ISSET (fd, &rfds)) {
 				execute (fd, users);
-				if (users[fd].connection < 0) {
+				if (users[fd - 4].connection < 0) {
 					return -1;	/* when children exec failed */
-				} else if (users[fd].connection == 0) {
+				} else if (users[fd - 4].connection == 0) {
 					FD_CLR (fd, &afds);	/* remove the inactive socket */
 					rm_user (fd, users);	/* remove the user */
 				}
@@ -87,21 +91,17 @@ void execute (int sock, User *users)
 	dup2 (sock, STDERR_FILENO);
 	shell (sock, users);
 	restore_fds (stdfd);
-	if (sock == 1) {
-		dup2 (2, 0);
-		close (2);
-	}
-	if (users[sock].connection > 0)
+	if (users[sock - 4].connection > 0)
 		write (sock, prompt, strlen(prompt));	/* show the prompt */
 }
 
 void broadcast (char *msg, User *users)
 {
-	int	fd;
-	for (fd = 1; fd <= MAX_USERS; ++fd) {
-		if (users[fd].connection > 0) {
-			write (fd, msg, strlen(msg));	/* print the message out */
-			write (fd, prompt, strlen(prompt));	/* show the prompt */
+	int	idx;
+	for (idx = 0; idx < MAX_USERS; ++idx) {
+		if (users[idx].connection > 0) {
+			write (idx + 4, msg, strlen(msg));	/* print the message out */
+			write (idx + 4, prompt, strlen(prompt));	/* show the prompt */
 		}
 	}
 }
@@ -110,29 +110,29 @@ void rm_user (int sock, User *users)
 {
 	char	msg[MAX_MSG_SIZE + 1];
 	/* broadcast that you're out */
-	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' left. ***\n", users[sock].name);
+	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' left. ***\n", users[sock - 4].name);
 	broadcast (msg, users);
 	/* clear the user entry */
 	close (sock);
-	users[sock].name[0] = 0;
-	users[sock].ip[0] = 0;
-	users[sock].port = 0;
-	users[sock].connection = 0;
-	clear_nps (users[sock].np);	/* free the allocated space of numbered pipes */
-	users[sock].np->fd = NULL;
+	users[sock - 4].name[0] = 0;
+	users[sock - 4].ip[0] = 0;
+	users[sock - 4].port = 0;
+	users[sock - 4].connection = 0;
+	clear_nps (users[sock - 4].np);	/* free the allocated space of numbered pipes */
+	users[sock - 4].np->fd = NULL;
 }
 
 void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 {
 	char	msg[MAX_MSG_SIZE + 1];
 	/* initialize the user entry */
-	strcpy (users[sock].name, "(no name)");
-	strcpy (users[sock].ip, inet_ntoa (cli_addr->sin_addr));
-	users[sock].port = cli_addr->sin_port;
-	users[sock].connection = 1;
+	strcpy (users[sock - 4].name, "(no name)");
+	strcpy (users[sock - 4].ip, inet_ntoa (cli_addr->sin_addr));
+	users[sock - 4].port = cli_addr->sin_port;
+	users[sock - 4].connection = 1;
 	write (sock, motd, strlen(motd));	/* print the welcome message */
 	/* broadcast that you're in */
-	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' entered from %s/%d. ***\n", users[sock].name, users[sock].ip, users[sock].port);
+	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' entered from %s/%d. ***\n", users[sock - 4].name, users[sock - 4].ip, users[sock - 4].port);
 	broadcast (msg, users);
 }
 
@@ -143,10 +143,6 @@ void initialize (void)
 	/* initialize the environment variables */
 	clearenv ();
 	putenv ("PATH=bin:.");
-	/* close the original fds */
-	close (STDIN_FILENO);
-	close (STDOUT_FILENO);
-	close (STDERR_FILENO);
 }
 
 int passiveTCP (int port, int qlen)

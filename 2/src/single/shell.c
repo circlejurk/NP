@@ -29,18 +29,18 @@ int shell (int sock, User *users)
 	int	progc, stdfd[3], readc;
 	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 2];
 
-	if (users[sock].connection > 0) {
+	if (users[sock - 4].connection > 0) {
 		/* read one line from client input */
-		if ((readc = readline (line, &(users[sock].connection))) < 0) {
+		if ((readc = readline (line, &(users[sock - 4].connection))) < 0) {
 			/* close numbered pipe for illegal input */
-			close_np (users[sock].np);
+			close_np (users[sock - 4].np);
 		} else if (readc > 0) {
 			/* save original fds */
 			save_fds (stdfd);
 			/* add new numbered pipe and set up to output */
-			set_np_out (line, users[sock].np, &(users[sock].connection));
+			set_np_out (line, users[sock - 4].np, &(users[sock - 4].connection));
 			/* set up the input from numbered pipe */
-			set_np_in (users[sock].np);
+			set_np_in (users[sock - 4].np);
 			/* parse the total input line into commands seperated by pipes */
 			progc = line_to_cmds (line, cmds);
 			/* execute one line command */
@@ -50,11 +50,11 @@ int shell (int sock, User *users)
 			/* free the allocated space of commands */
 			clear_cmds (progc, cmds);
 			/* shift all the numbered pipes by one (count down timer) */
-			np_countdown (users[sock].np);
+			np_countdown (users[sock - 4].np);
 		}
 	}
 
-	return users[sock].connection;
+	return users[sock - 4].connection;
 }
 
 int readline (char *line, int *connection)
@@ -172,7 +172,7 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 
 		/* execute the command accordingly */
 		if (*argv != NULL && strcmp (*argv, "exit") == 0) {
-			users[sock].connection = 0;
+			users[sock - 4].connection = 0;
 		} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
 			printenv (argc, argv);
 		} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
@@ -183,7 +183,7 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 			/* create a pipe */
 			if (pipe(pipefd) < 0) {
 				fputs ("server error: failed to create pipes\n", stderr);
-				users[sock].connection = 0;
+				users[sock - 4].connection = 0;
 				return;
 			}
 			/* fork a child and exec the program */
@@ -195,7 +195,7 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 				open_files (in_file, out_file);
 				execvpe (*argv, argv, environ);
 				fprintf (stderr, "Unknown command: [%s].\n", *argv);
-				users[sock].connection = -1;
+				users[sock - 4].connection = -1;
 				i = progc;
 			} else {
 				set_pipes_in (pipefd, stdfd, i, progc);
@@ -215,21 +215,19 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 
 void who (int sock, User *users)
 {
-	/*
-	int	fd;
+	int	idx;
 	char	msg[MAX_MSG_SIZE + 1];
-	write (sock, "<sockd>\t<nickname>\t<IP/port>\t\t<indicate me>\n", 44);
-	for (fd = 1; fd <= MAX_USERS; ++fd) {
-		if (users[fd].connection > 0) {
-			snprintf (msg, MAX_MSG_SIZE + 1, "%d\t%s\t%s/%d", fd, users[fd].name, users[fd].ip, users[fd].port);
-			if (fd == sock)
+	write (STDOUT_FILENO, "<sockd>\t<nickname>\t<IP/port>\t\t<indicate me>\n", 44);
+	for (idx = 0; idx < MAX_USERS; ++idx) {
+		if (users[idx].connection > 0) {
+			snprintf (msg, MAX_MSG_SIZE + 1, "%d\t%s\t%s/%d", idx + 1, users[idx].name, users[idx].ip, users[idx].port);
+			if (idx + 4 == sock)
 				strcat (msg, "\t\t<- me\n");
 			else
 				strcat (msg, "\n");
-			write (sock, msg, strlen(msg));
+			write (STDOUT_FILENO, msg, strlen(msg));
 		}
 	}
-	*/
 }
 
 void setupenv (int argc, char **argv)

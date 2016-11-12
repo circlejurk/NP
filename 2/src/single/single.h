@@ -4,8 +4,8 @@
 #define MAX_PIPE	1000
 
 #define MAX_USERS	30
-#define MAX_MSG_SIZE	256
-#define NAME_SIZE	128
+#define MAX_MSG_SIZE	128
+#define NAME_SIZE	64
 
 extern const char motd[], prompt[];
 
