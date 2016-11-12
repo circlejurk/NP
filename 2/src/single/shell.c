@@ -181,6 +181,10 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 			who (sock, users);
 		} else if (*argv != NULL && strcmp (*argv, "name") == 0) {
 			name (sock, users, argv[1]);
+		} else if (*argv != NULL && strcmp (*argv, "tell") == 0) {
+			tell (sock, users, argc, argv);
+		} else if (*argv != NULL && strcmp (*argv, "yell") == 0) {
+			yell (sock, users, argc, argv);
 		} else {
 			/* create a pipe */
 			if (pipe(pipefd) < 0) {
@@ -213,6 +217,26 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 
 	/* restore original fds */
 	restore_fds (stdfd);
+}
+
+void tell (int sock, User *users, int argc, char **argv)
+{
+	int	i, to_sock = atoi (argv[1]) + 3;
+	char	*msg = malloc (strlen (users[sock - 4].name) + 19 + MAX_MSG_SIZE + 1);
+	sprintf (msg, "\n*** %s told you ***: ", users[sock - 4].name);
+	for (i = 2; i < argc; ++i) {
+		strcat (msg, argv[i]);
+		if (i == argc - 1)
+			strcat (msg, "\n% ");
+		else
+			strcat (msg, " ");
+	}
+	write (to_sock, msg, strlen (msg));
+	free (msg);
+}
+
+void yell (int sock, User *users, int argc, char **argv)
+{
 }
 
 void name (int sock, User *users, char *new_name)

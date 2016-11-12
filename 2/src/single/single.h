@@ -50,6 +50,8 @@ void printenv (int argc, char **argv);
 void setupenv (int argc, char **argv);
 void who (int sock, User *users);
 void name (int sock, User *users, char *new_name);
+void tell (int sock, User *users, int argc, char **argv);
+void yell (int sock, User *users, int argc, char **argv);
 
 /* implemented in server.c */
 void broadcast (char *msg, int sock, User *users);
