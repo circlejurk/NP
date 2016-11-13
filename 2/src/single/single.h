@@ -54,7 +54,7 @@ void name (int sock, User *users, char *new_name);
 void tell (int sock, User *users, int argc, char **argv);
 void yell (int sock, User *users, int argc, char **argv);
 
-void resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *users);
+int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *users);
 void set_up_to (int sock, User *users, int *to, int up_w, char *ori_cmd);
 void set_up_from (int sock, User *users, int *from, int up_r, char *ori_cmd);
 void clear_ups (int sock, User *users);
