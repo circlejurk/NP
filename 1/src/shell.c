@@ -133,6 +133,8 @@ void clear_nps (Npipe np[MAX_PIPE])
 	int	 i;
 	for (i = 0; i < MAX_PIPE; ++i) {
 		if (np[i].fd) {
+			close (np[i].fd[0]);
+			close (np[i].fd[1]);
 			free (np[i].fd);
 			np[i].fd = NULL;
 		}
@@ -145,25 +147,27 @@ void close_np (Npipe np[MAX_PIPE])
 		close (np[0].fd[1]);
 		close (np[0].fd[0]);
 		free (np[0].fd);
+		np[0].fd = NULL;
 	}
 }
 
 void np_countdown (Npipe np[MAX_PIPE])
 {
 	int	i;
-	for (i = 0; i < MAX_PIPE - 1; ++i)
+	for (i = 0; i < MAX_PIPE - 1; ++i) {
 		np[i] = np[i + 1];
-	np[MAX_PIPE - 1].fd = NULL;
+		np[i + 1].fd = NULL;
+	}
 }
 
 void set_np_in (Npipe np[MAX_PIPE])
 {
 	if (np[0].fd) {
 		close (np[0].fd[1]);
-		close (STDIN_FILENO);
-		dup (np[0].fd[0]);
+		dup2 (np[0].fd[0], STDIN_FILENO);
 		close (np[0].fd[0]);
 		free (np[0].fd);
+		np[0].fd = NULL;
 	}
 }
 
