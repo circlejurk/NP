@@ -219,6 +219,22 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 	restore_fds (stdfd);
 }
 
+void yell (int sock, User *users, int argc, char **argv)
+{
+	int	i;
+	char	*msg = malloc (strlen (users[sock - 4].name) + 17 + MAX_MSG_SIZE + 1);
+	sprintf (msg, "*** %s yelled ***: ", users[sock - 4].name);
+	for (i = 1; i < argc; ++i) {
+		strcat (msg, argv[i]);
+		if (i == argc - 1)
+			strcat (msg, "\n");
+		else
+			strcat (msg, " ");
+	}
+	broadcast (msg, sock, users);
+	free (msg);
+}
+
 void tell (int sock, User *users, int argc, char **argv)
 {
 	int	i, to_sock = atoi (argv[1]) + 3;
@@ -233,10 +249,6 @@ void tell (int sock, User *users, int argc, char **argv)
 	}
 	write (to_sock, msg, strlen (msg));
 	free (msg);
-}
-
-void yell (int sock, User *users, int argc, char **argv)
-{
 }
 
 void name (int sock, User *users, char *new_name)
@@ -437,7 +449,7 @@ int isnumber (char *s)
 	for (i = 0; s[i] != 0; ++i)
 		if (!isdigit(s[i]))
 			return 0;
-	return 1;
+	return i;
 }
 
 int arespace (char *s)
