@@ -381,7 +381,6 @@ void who (int sock, User *users)
 {
 	int	idx;
 	char	msg[MAX_MSG_SIZE + 1];
-	write (STDOUT_FILENO, "<sockd>\t<nickname>\t<IP/port>\t\t<indicate me>\n", 44);
 	for (idx = 0; idx < MAX_USERS; ++idx) {
 		if (users[idx].connection > 0) {
 			if (strlen (users[idx].name) < 8)
