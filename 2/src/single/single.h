@@ -5,7 +5,7 @@
 
 #define MAX_USERS	30
 #define MAX_MSG_SIZE	1024
-#define NAME_SIZE	64
+#define NAME_SIZE	20
 
 extern const char motd[], prompt[];
 
