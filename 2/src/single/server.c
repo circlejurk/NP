@@ -104,7 +104,7 @@ void rm_user (int sock, User *users)
 {
 	char	msg[MAX_MSG_SIZE + 1];
 	/* broadcast that you're out */
-	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' left. ***\n", users[sock - 4].name);
+	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[sock - 4].name);
 	broadcast (msg, sock, users);
 	/* clear the user entry */
 	close (sock);
@@ -128,7 +128,7 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 	users[sock - 4].up = calloc (MAX_USERS, sizeof (int));
 	write (sock, motd, strlen(motd));	/* print the welcome message */
 	/* broadcast that you're in */
-	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' entered from %s/%d. ***\n", users[sock - 4].name, users[sock - 4].ip, users[sock - 4].port);
+	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' entered from %s/%d. ***\n", users[sock - 4].name, users[sock - 4].ip, users[sock - 4].port);
 	broadcast (msg, sock, users);
 	write (sock, prompt, strlen(prompt));	/* show the prompt */
 }

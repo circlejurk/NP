@@ -20,7 +20,7 @@
 
 const char motd[] =	"****************************************\n"
 			"** Welcome to the information server. **\n"
-			"****************************************\n";
+			"****************************************\n\n";
 const char prompt[] = "% ";
 
 
@@ -360,7 +360,7 @@ void tell (int sock, User *users, int argc, char **argv)
 {
 	int	i, to_sock = atoi (argv[1]) + 3;
 	char	*msg = malloc (strlen (users[sock - 4].name) + 19 + MAX_MSG_SIZE + 1);
-	sprintf (msg, "\n*** %s told you ***: ", users[sock - 4].name);
+	sprintf (msg, "*** %s told you ***: ", users[sock - 4].name);
 	for (i = 2; i < argc; ++i) {
 		strcat (msg, argv[i]);
 		if (i == argc - 1)
@@ -376,7 +376,7 @@ void name (int sock, User *users, char *new_name)
 {
 	char	msg[MAX_MSG_SIZE + 1];
 	strncpy (users[sock - 4].name, new_name, NAME_SIZE);
-	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User from %s/%d is named '%s'. ***\n", users[sock - 4].ip, users[sock - 4].port, users[sock - 4].name);
+	snprintf (msg, MAX_MSG_SIZE + 1, "*** User from %s/%d is named '%s'. ***\n", users[sock - 4].ip, users[sock - 4].port, users[sock - 4].name);
 	broadcast (msg, sock, users);
 }
 
