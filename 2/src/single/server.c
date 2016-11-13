@@ -39,8 +39,10 @@ int main (void)
 
 	initialize ();	/* server initialization */
 
-	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0)	/* build a TCP connection */
+	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0) {	/* build a TCP connection */
+		fputs ("server error: passiveTCP failed\n", stderr);
 		return -1;
+	}
 
 	/* initialize the active file descriptor set */
 	FD_ZERO (&afds);
@@ -62,6 +64,7 @@ int main (void)
 				return -1;
 			} else if (ssock >= MAX_USERS + 4) {
 				write (ssock, "It's full now...\nYou may try again after a while.\n", 50);
+				close (ssock);
 			} else {
 				FD_SET (ssock, &afds);		/* add an active socket */
 				add_user (ssock, &cli_addr, users);	/* add a user */
@@ -110,6 +113,7 @@ void rm_user (int sock, User *users)
 	users[sock - 4].port = 0;
 	users[sock - 4].connection = 0;
 	clear_nps (sock, users);	/* free the allocated spaces of numbered pipes */
+	clear_ups (sock, users);	/* free the allocated spaces of user pipes */
 }
 
 void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
@@ -121,6 +125,7 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 	users[sock - 4].port = cli_addr->sin_port;
 	users[sock - 4].connection = 1;
 	users[sock - 4].np = NULL;
+	users[sock - 4].up = calloc (MAX_USERS, sizeof (int));
 	write (sock, motd, strlen(motd));	/* print the welcome message */
 	/* broadcast that you're in */
 	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' entered from %s/%d. ***\n", users[sock - 4].name, users[sock - 4].ip, users[sock - 4].port);
@@ -169,14 +174,15 @@ int passiveTCP (int port, int qlen)
 	return sockfd;
 }
 
+/* broadcast will not write to the client itself */
 void broadcast (char *msg, int sock, User *users)
 {
 	int	idx;
 	for (idx = 0; idx < MAX_USERS; ++idx) {
 		if (users[idx].connection > 0) {
 			write (idx + 4, msg, strlen(msg));	/* print the message out */
-			if (idx + 4 != sock)	/* show the prompt for others */
-				write (idx + 4, prompt, strlen(prompt));
+			if (idx + 4 != sock)
+				write (idx + 4, prompt, strlen(prompt))	/* show the prompt */;
 		}
 	}
 }

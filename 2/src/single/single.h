@@ -14,11 +14,12 @@ typedef struct numbered_pipe {
 } Npipe;
 
 typedef struct user {
-	char	name[NAME_SIZE];
-	char	ip[16];
-	int	port;
-	int	connection;
-	Npipe	*np;
+	char	name[NAME_SIZE];	/* client's name */
+	char	ip[16];			/* client's ip */
+	int	port;			/* client's port */
+	int	connection;		/* client's connection status, 1: on, 0: off, -1: err */
+	Npipe	*np;			/* client's numbered pipe, created when first use */
+	int	*up;			/* client's user pipe, created when the user logged in */
 } User;
 
 /* implemented in shell.c */
@@ -52,6 +53,11 @@ void who (int sock, User *users);
 void name (int sock, User *users, char *new_name);
 void tell (int sock, User *users, int argc, char **argv);
 void yell (int sock, User *users, int argc, char **argv);
+
+void resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *users);
+void set_up_to (int sock, User *users, int *to, int up_w, char *ori_cmd);
+void set_up_from (int sock, User *users, int *from, int up_r, char *ori_cmd);
+void clear_ups (int sock, User *users);
 
 /* implemented in server.c */
 void broadcast (char *msg, int sock, User *users);
