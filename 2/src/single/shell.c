@@ -63,10 +63,13 @@ int readline (char *line, int *connection)
 	char	*p = NULL;
 	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
 	if (ferror (stdin)) {
+		clearerr (stdin);
 		fputs ("read error: fgets failed\n", stderr);
 		return -1;
-	} else if (feof (stdin))	/* EOF */
+	} else if (feof (stdin)) {	/* EOF */
+		clearerr (stdin);
 		*connection = 0;
+	}
 	if (p == NULL)		/* no data was read */
 		return 0;
 	/* check for illegal input and remove crlf */
