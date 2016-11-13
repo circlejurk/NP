@@ -18,7 +18,7 @@ typedef struct user {
 	char	ip[16];
 	int	port;
 	int	connection;
-	Npipe	np[MAX_PIPE];
+	Npipe	*np;
 } User;
 
 /* implemented in shell.c */
@@ -30,11 +30,11 @@ int readline (char *line, int *connection);
 int arespace (char *s);
 
 int isnumber (char *s);
-void set_np_out (char *line, Npipe np[MAX_PIPE], int *connection);
-void set_np_in (Npipe np[MAX_PIPE]);
-void close_np (Npipe np[MAX_PIPE]);
-void np_countdown (Npipe np[MAX_PIPE]);
-void clear_nps (Npipe np[MAX_PIPE]);
+void set_np_out (char *line, int sock, User *users);
+void set_np_in (Npipe *np);
+void close_np (Npipe *np);
+void np_countdown (Npipe *np);
+void clear_nps (int sock, User *users);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);

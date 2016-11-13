@@ -38,7 +38,7 @@ int shell (int sock, User *users)
 			/* save original fds */
 			save_fds (stdfd);
 			/* add new numbered pipe and set up to output */
-			set_np_out (line, users[sock - 4].np, &(users[sock - 4].connection));
+			set_np_out (line, sock, users);
 			/* set up the input from numbered pipe */
 			set_np_in (users[sock - 4].np);
 			/* parse the total input line into commands seperated by pipes */
@@ -85,70 +85,81 @@ int readline (char *line, int *connection)
 	return strlen (line);
 }
 
-void clear_nps (Npipe np[MAX_PIPE])
+void clear_nps (int sock, User *users)
 {
-	int	 i;
-	for (i = 0; i < MAX_PIPE; ++i) {
-		if (np[i].fd) {
-			free (np[i].fd);
-			np[i].fd = NULL;
+	int	i;
+	if (users[sock - 4].np) {
+		for (i = 0; i < MAX_PIPE; ++i) {
+			if (users[sock - 4].np[i].fd) {
+				free (users[sock - 4].np[i].fd);
+				users[sock - 4].np[i].fd = NULL;
+			}
 		}
+		free (users[sock - 4].np);
+		users[sock - 4].np = NULL;
 	}
 }
 
-void close_np (Npipe np[MAX_PIPE])
+void close_np (Npipe *np)
 {
-	if (np[0].fd) {
+	if (np && np[0].fd) {
 		close (np[0].fd[1]);
 		close (np[0].fd[0]);
 		free (np[0].fd);
 	}
 }
 
-void np_countdown (Npipe np[MAX_PIPE])
+void np_countdown (Npipe *np)
 {
-	int	i;
-	for (i = 0; i < MAX_PIPE - 1; ++i)
-		np[i] = np[i + 1];
-	np[MAX_PIPE - 1].fd = NULL;
+	if (np) {
+		int	i;
+		for (i = 0; i < MAX_PIPE - 1; ++i)
+			np[i] = np[i + 1];
+		np[MAX_PIPE - 1].fd = NULL;
+	}
 }
 
-void set_np_in (Npipe np[MAX_PIPE])
+void set_np_in (Npipe *np)
 {
-	if (np[0].fd) {
+	if (np && np[0].fd) {
 		close (np[0].fd[1]);
 		close (STDIN_FILENO);
 		dup (np[0].fd[0]);
 		close (np[0].fd[0]);
 		free (np[0].fd);
+		np[0].fd = NULL;
 	}
 }
 
-void set_np_out (char *line, Npipe np[MAX_PIPE], int *connection)
+void set_np_out (char *line, int sock, User *users)
 {
 	int	i, number;
 
 	/* find the numbered pipe in the current input line and add it in */
 	for (i = 0; line[i] != 0; ++i) {
 		if ((line[i] == '|' || line[i] == '!') && isnumber (line + i + 1)) {
+			/* construct the numbered pipe */
+			if (users[sock - 4].np == NULL)
+				users[sock - 4].np = calloc (MAX_PIPE, sizeof (Npipe));
+
 			/* the pipe number */
 			number = atoi (line + i + 1);
 
 			/* create a new pipe if it has not been created */
-			if (np[number].fd == NULL) {
-				np[number].fd = (int *) malloc (2 * sizeof(int));
-				if (pipe (np[number].fd) < 0) {
+			if (users[sock - 4].np[number].fd == NULL) {
+				users[sock - 4].np[number].fd = (int *) malloc (2 * sizeof(int));
+				if (pipe (users[sock - 4].np[number].fd) < 0) {
 					fputs ("server error: failed to create numbered pipes\n", stderr);
-					*connection = 0;
+					users[sock - 4].connection = 0;
 				}
 			}
 
 			/* set up the output to pipe */
 			close (STDOUT_FILENO);
-			dup (np[number].fd[1]);
+			dup (users[sock - 4].np[number].fd[1]);
 			if (line[i] == '!') {
 				close (STDERR_FILENO);
-				dup (np[number].fd[1]);
+				dup (users[sock - 4].np[number].fd[1]);
 			}
 
 			line[i] = 0;

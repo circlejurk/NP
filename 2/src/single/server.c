@@ -106,8 +106,7 @@ void rm_user (int sock, User *users)
 	users[sock - 4].ip[0] = 0;
 	users[sock - 4].port = 0;
 	users[sock - 4].connection = 0;
-	clear_nps (users[sock - 4].np);	/* free the allocated space of numbered pipes */
-	users[sock - 4].np->fd = NULL;
+	clear_nps (sock, users);	/* free the allocated spaces of numbered pipes */
 }
 
 void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
@@ -118,6 +117,7 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 	strcpy (users[sock - 4].ip, inet_ntoa (cli_addr->sin_addr));
 	users[sock - 4].port = cli_addr->sin_port;
 	users[sock - 4].connection = 1;
+	users[sock - 4].np = NULL;
 	write (sock, motd, strlen(motd));	/* print the welcome message */
 	/* broadcast that you're in */
 	snprintf (msg, MAX_MSG_SIZE + 1, "\n*** User '%s' entered from %s/%d. ***\n", users[sock - 4].name, users[sock - 4].ip, users[sock - 4].port);
