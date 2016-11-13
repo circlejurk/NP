@@ -184,7 +184,8 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 		/* save the original command */
 		strncpy (ori_cmd, cmds[i], MAX_CMD_SIZE + 1);
 		/* resolve user pipes from commmand */
-		resolv_ups (cmds[i], userpipe, &to, &from, sock, users);
+		if (resolv_ups (cmds[i], userpipe, &to, &from, sock, users) < 0)
+			break;
 		set_up_from (sock, users, &from, userpipe[0], ori_cmd);
 		/* parse the input command into argv */
 		argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
@@ -264,25 +265,35 @@ void set_up_from (int sock, User *users, int *from, int up_r, char *ori_cmd)
 	}
 }
 
-void resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *users)
+int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *users)
 {
 	int	i, j, pipefd[2];
-	char	msg[MAX_MSG_SIZE + 1] = {0};
+	char	msg[MAX_MSG_SIZE + 1], remain[MAX_CMD_SIZE + 1];
 	userpipe[0] = userpipe[1] = *to = *from = 0;
 	/* resolve the input command and remove the user pipes' part */
 	for (i = 0; cmd[i] != 0; ++i) {
 		if ((cmd[i] == '>' || cmd[i] == '<') && cmd[i + 1] != ' ') {
 			for (j = i + 1; isdigit (cmd[j]); ++j);
 			if (cmd[j] == 0 || isspace (cmd[j])) {
+				strncpy (remain, cmd + j, MAX_CMD_SIZE + 1);
 				cmd[j] = 0;
 				if (cmd[i] == '>') {
 					if ((*to = atoi (cmd + i + 1)) > 0) {
-						if (users[*to - 1].up[sock - 4] != 0) {
+						if (users[*to - 1].connection == 0) {
+							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *to);
+							write (STDERR_FILENO, msg, strlen (msg));
+							*to = 0;
+							return -1;
+						} else if (users[*to - 1].up[sock - 4] != 0) {
 							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the pipe #%d->#%d already exists. ***\n", sock - 3, *to);
 							write (STDERR_FILENO, msg, strlen (msg));
 							*to = 0;
+							return -1;
 						} else if (pipe (pipefd) < 0) {
-							fputs ("error: failed to create user pipes\n", stderr);
+							snprintf (msg, MAX_MSG_SIZE + 1, "error: failed to create user pipes\n");
+							write (STDERR_FILENO, msg, strlen (msg));
+							*to = 0;
+							return -1;
 						} else {
 							users[*to - 1].up[sock - 4] = pipefd[0];
 							userpipe[1] = pipefd[1];
@@ -290,10 +301,16 @@ void resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User 
 					}
 				} else {
 					if ((*from = atoi (cmd + i + 1)) > 0) {
-						if (users[sock - 4].up[*from - 1] == 0) {
+						if (users[*from - 1].connection == 0) {
+							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *from);
+							write (STDERR_FILENO, msg, strlen (msg));
+							*from = 0;
+							return -1;
+						} else if (users[sock - 4].up[*from - 1] == 0) {
 							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the pipe #%d->#%d does not exist yet. ***\n", *from, sock - 3);
 							write (STDERR_FILENO, msg, strlen (msg));
 							*from = 0;
+							return -1;
 						} else {
 							userpipe[0] = users[sock - 4].up[*from - 1];
 							users[sock - 4].up[*from - 1] = 0;
@@ -302,10 +319,11 @@ void resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User 
 				}
 				cmd[i] = ' ';
 				cmd[i + 1] = 0;
-				strcat (cmd, cmd + j + 1);
+				strcat (cmd, remain);
 			}
 		}
 	}
+	return 0;
 }
 
 void clear_ups (int sock, User *users)
