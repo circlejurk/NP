@@ -507,14 +507,14 @@ int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 	int	argc = 0;
 	char	*arg;
 
-	arg = strtok (cmd, " \r\n");
+	arg = strtok (cmd, " \r\n\t");
 	while (arg != NULL) {
 		if (strcmp (arg, ">") == 0) {
-			arg = strtok (NULL, " \r\n");
+			arg = strtok (NULL, " \r\n\t");
 			*out_file = (char *) malloc (strlen(arg) + 1);
 			strcpy (*out_file, arg);
 		} else if (strcmp (arg, "<") == 0) {
-			arg = strtok (NULL, " \r\n");
+			arg = strtok (NULL, " \r\n\t");
 			*in_file = (char *) malloc (strlen(arg) + 1);
 			strcpy (*in_file, arg);
 		} else {
@@ -522,7 +522,7 @@ int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 			strcpy (argv[argc], arg);
 			++argc;
 		}
-		arg = strtok (NULL, " \r\n");
+		arg = strtok (NULL, " \r\n\t");
 	}
 
 	return argc;
