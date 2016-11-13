@@ -60,9 +60,12 @@ int main (void)
 			if (ssock < 0) {
 				fputs ("server error: accept failed\n", stderr);
 				return -1;
+			} else if (ssock >= MAX_USERS + 4) {
+				write (ssock, "It's full now...\nYou may try again after a while.\n", 50);
+			} else {
+				FD_SET (ssock, &afds);		/* add an active socket */
+				add_user (ssock, &cli_addr, users);	/* add a user */
 			}
-			FD_SET (ssock, &afds);		/* add an active socket */
-			add_user (ssock, &cli_addr, users);	/* add a user */
 		}
 		/* handle one line command if needed */
 		for (fd = 4; fd < nfds; ++fd) {
