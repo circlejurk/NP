@@ -105,11 +105,14 @@ int readline (char *line, int *connection)
 	int	i;
 	char	*p = NULL;
 	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
-	if (ferror (stdin)) {
+	if (ferror (stdin)) {		/* error */
+		clearerr (stdin);
 		fputs ("read error: fgets failed\n", stderr);
 		return -1;
-	} else if (feof (stdin))	/* EOF */
+	} else if (feof (stdin)) {	/* EOF */
+		clearerr (stdin);
 		*connection = 0;
+	}
 	if (p == NULL)		/* no data was read */
 		return 0;
 	/* check for illegal input and remove crlf */
@@ -119,7 +122,6 @@ int readline (char *line, int *connection)
 			return -1;
 		} else if (line[i] == '\r' || line[i] == '\n') {
 			line[i] = 0;
-			line[i + 1] = 0;
 			if (arespace (line))
 				return 0;
 			break;
@@ -163,11 +165,11 @@ void np_countdown (Npipe np[MAX_PIPE])
 void set_np_in (Npipe np[MAX_PIPE])
 {
 	if (np[0].fd) {
-		close (np[0].fd[1]);
-		dup2 (np[0].fd[0], STDIN_FILENO);
-		close (np[0].fd[0]);
-		free (np[0].fd);
-		np[0].fd = NULL;
+		close (np[0].fd[1]);			/* close the write end of the pipe */
+		dup2 (np[0].fd[0], STDIN_FILENO);	/* duplicate the read end of the pipe to stdin */
+		close (np[0].fd[0]);			/* then close the read end of the pipe */
+		free (np[0].fd);			/* free the allocated space for fds */
+		np[0].fd = NULL;			/* reset to NULL */
 	}
 }
 
@@ -191,12 +193,9 @@ void set_np_out (char *line, Npipe np[MAX_PIPE], int *connection)
 			}
 
 			/* set up the output to pipe */
-			close (STDOUT_FILENO);
-			dup (np[number].fd[1]);
-			if (line[i] == '!') {
-				close (STDERR_FILENO);
-				dup (np[number].fd[1]);
-			}
+			dup2 (np[number].fd[1], STDOUT_FILENO);
+			if (line[i] == '!')
+				dup2 (np[number].fd[1], STDERR_FILENO);
 
 			line[i] = 0;
 			break;
@@ -208,9 +207,10 @@ void execute_one_line (int progc, char **cmds, int *connection)
 {
 	pid_t	childpid;
 	int	i, argc, pipefd[2], stdfd[3], stat;
-	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL;
+	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0};
+	char	*in_file = NULL, *out_file = NULL;
 
-	/* save original fds */
+	/* save original fds, may the duplicated by numbered pipes */
 	save_fds (stdfd);
 
 	for (i = 0; i < progc; ++i) {
@@ -218,11 +218,11 @@ void execute_one_line (int progc, char **cmds, int *connection)
 		argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
 
 		/* execute the command accordingly */
-		if (*argv != NULL && strcmp (*argv, "exit") == 0) {
+		if (strcmp (argv[0], "exit") == 0) {
 			*connection = 0;
-		} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
+		} else if (strcmp (argv[0], "printenv") == 0) {
 			printenv (argc, argv);
-		} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
+		} else if (strcmp (argv[0], "setenv") == 0) {
 			setupenv (argc, argv);
 		} else {
 			/* create a pipe */
@@ -236,18 +236,20 @@ void execute_one_line (int progc, char **cmds, int *connection)
 				close (pipefd[0]); close (pipefd[1]);
 				fputs ("server error: fork failed\n", stderr);
 			} else if (childpid == 0) {
+				/* set up pipe to write to */
 				set_pipes_out (pipefd, stdfd, i, progc);
 				open_files (in_file, out_file);
+				/* invoke the command */
 				execvpe (*argv, argv, environ);
+				/* error handling */
 				fprintf (stderr, "Unknown command: [%s].\n", *argv);
 				*connection = -1;
 				i = progc;
-			} else {
-				set_pipes_in (pipefd, stdfd, i, progc);
-				wait (&stat);
-				if (stat != 0)
-					i = progc;
 			}
+			set_pipes_in (pipefd, stdfd, i, progc);
+			wait (&stat);
+			if (stat != 0)
+				i = progc;
 		}
 
 		/* free the allocated space of one command */
@@ -302,14 +304,11 @@ void save_fds (int *stdfd)
 
 void restore_fds (int *stdfd)
 {
-	close (STDIN_FILENO);
-	dup (stdfd[0]);
+	dup2 (stdfd[0], STDIN_FILENO);
 	close (stdfd[0]);
-	close (STDOUT_FILENO);
-	dup (stdfd[1]);
+	dup2 (stdfd[1], STDOUT_FILENO);
 	close (stdfd[1]);
-	close (STDERR_FILENO);
-	dup (stdfd[2]);
+	dup2 (stdfd[2], STDERR_FILENO);
 	close (stdfd[2]);
 }
 
@@ -322,8 +321,7 @@ void open_files (const char *in_file, const char *out_file)
 			fprintf (stderr, "server error: cannot open file %s\n", in_file);
 			exit (1);
 		}
-		close (STDIN_FILENO);
-		dup (infd);
+		dup2 (infd, STDIN_FILENO);
 		close (infd);
 	}
 	if (out_file) {
@@ -332,8 +330,7 @@ void open_files (const char *in_file, const char *out_file)
 			fprintf (stderr, "server error: cannot open file %s\n", out_file);
 			exit (1);
 		}
-		close (STDOUT_FILENO);
-		dup (outfd);
+		dup2 (outfd, STDOUT_FILENO);
 		close (outfd);
 	}
 }
@@ -369,14 +366,14 @@ int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 	int	argc = 0;
 	char	*arg;
 
-	arg = strtok (cmd, " \r\n");
+	arg = strtok (cmd, " \r\n\t");
 	while (arg != NULL) {
 		if (strcmp (arg, ">") == 0) {
-			arg = strtok (NULL, " \r\n");
+			arg = strtok (NULL, " \r\n\t");
 			*out_file = (char *) malloc (strlen(arg) + 1);
 			strcpy (*out_file, arg);
 		} else if (strcmp (arg, "<") == 0) {
-			arg = strtok (NULL, " \r\n");
+			arg = strtok (NULL, " \r\n\t");
 			*in_file = (char *) malloc (strlen(arg) + 1);
 			strcpy (*in_file, arg);
 		} else {
@@ -384,7 +381,7 @@ int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 			strcpy (argv[argc], arg);
 			++argc;
 		}
-		arg = strtok (NULL, " \r\n");
+		arg = strtok (NULL, " \r\n\t");
 	}
 
 	return argc;
@@ -409,7 +406,7 @@ int line_to_cmds (char *line, char **cmds)
 
 	cmd = strtok (line, "|\r\n");
 	while (cmd != NULL ) {
-		cmds[progc] = (char *) malloc (strlen(cmd) + 1);
+		cmds[progc] = (char *) malloc (strlen (cmd) + 1);
 		strcpy (cmds[progc], cmd);
 		++progc;
 		cmd = strtok (NULL, "|\r\n");
@@ -431,7 +428,7 @@ int isnumber (char *s)
 	for (i = 0; s[i] != 0; ++i)
 		if (!isdigit(s[i]))
 			return 0;
-	return 1;
+	return i;
 }
 
 int arespace (char *s)

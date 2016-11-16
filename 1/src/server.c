@@ -49,12 +49,9 @@ int main (void)
 			fputs ("server error: fork failed\n", stderr);
 			exit (1);
 		} else if (childpid == 0) {
-			close (STDIN_FILENO);
-			close (STDOUT_FILENO);
-			close (STDERR_FILENO);
-			dup (ssock);
-			dup (ssock);
-			dup (ssock);
+			dup2 (ssock, STDIN_FILENO);
+			dup2 (ssock, STDOUT_FILENO);
+			dup2 (ssock, STDERR_FILENO);
 			close (msock);
 			close (ssock);
 			exit (shell ());
