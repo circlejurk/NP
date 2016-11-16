@@ -140,7 +140,7 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 void initialize (void)
 {
 	/* initialize the original directory */
-	/*chdir ("/u/cs/103/0310004/rwg");*/
+	chdir ("/u/cs/103/0310004/rwg");
 	/* initialize the environment variables */
 	clearenv ();
 	putenv ("PATH=bin:.");
