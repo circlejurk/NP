@@ -12,9 +12,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-#define SERV_TCP_PORT	9527
+#include "shell.h"
 
-int shell (void);
+void initialize (void);
 void reaper (int sig);
 int passiveTCP (int port, int qlen);
 
@@ -25,14 +25,13 @@ int main (void)
 	pid_t			childpid;
 	struct sockaddr_in	cli_addr;
 
-	/* initialize the original directory */
-	chdir ("/u/cs/103/0310004/ras");
-
-	/* establish a signal handler for SIGCHLD */
-	signal (SIGCHLD, reaper);
+	initialize ();	/* server initialization */
 
 	/* build a TCP connection */
-	msock = passiveTCP (SERV_TCP_PORT, 0);
+	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0) {
+		fputs ("server error: passiveTCP failed\n", stderr);
+		return -1;
+	}
 
 	while (1) {
 		/* accept connection request */
@@ -41,7 +40,7 @@ int main (void)
 			if (errno == EINTR)
 				continue;
 			fputs ("server error: accept failed\n", stderr);
-			exit (1);
+			return -1;
 		}
 
 		/* fork another process to handle the request */
@@ -62,6 +61,14 @@ int main (void)
 	return 0;
 }
 
+void initialize (void)
+{
+	/* initialize the original directory */
+	chdir ("/u/cs/103/0310004/ras");
+	/* establish a signal handler for SIGCHLD */
+	signal (SIGCHLD, reaper);
+}
+
 void reaper (int sig)
 {
 	while (waitpid (-1, NULL, WNOHANG) > 0);
@@ -76,7 +83,7 @@ int passiveTCP (int port, int qlen)
 	/* open a TCP socket */
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		fputs ("server error: cannot open socket\n", stderr);
-		exit (1);
+		return -1;
 	}
 
 	/* set up server socket addr */
@@ -88,13 +95,13 @@ int passiveTCP (int port, int qlen)
 	/* bind to server address */
 	if (bind (sockfd, (const struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
 		fputs ("server error: cannot bind local address\n", stderr);
-		exit (1);
+		return -1;
 	}
 
 	/* listen for requests */
 	if (listen (sockfd, qlen) < 0) {
 		fputs ("server error: listen failed\n", stderr);
-		exit (1);
+		return -1;
 	}
 
 	return sockfd;
