@@ -39,7 +39,8 @@ int main (void)
 
 	initialize ();	/* server initialization */
 
-	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0) {	/* build a TCP connection */
+	/* build a TCP connection */
+	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0) {
 		fputs ("server error: passiveTCP failed\n", stderr);
 		return -1;
 	}
@@ -63,14 +64,15 @@ int main (void)
 				fputs ("server error: accept failed\n", stderr);
 				return -1;
 			} else if (ssock >= MAX_USERS + 4) {
-				write (ssock, "It's full now...\nYou may try again after a while.\n", 50);
+				write (ssock, "It's full now...\n"
+					"You may try again after a while.\n", 50);
 				close (ssock);
 			} else {
 				FD_SET (ssock, &afds);		/* add an active socket */
 				add_user (ssock, &cli_addr, users);	/* add a user */
 			}
 		}
-		/* handle one line command if needed */
+		/* execute the command input by clients */
 		for (fd = 4; fd < nfds; ++fd) {
 			if (fd != msock && FD_ISSET (fd, &rfds)) {
 				execute (fd, users);
@@ -92,7 +94,7 @@ int main (void)
 void execute (int sock, User *users)
 {
 	int	stdfd[3];
-	save_fds (stdfd);
+	save_fds (stdfd);	/* save the fds for the server fds, e.g. console */
 	dup2 (sock, STDIN_FILENO);
 	dup2 (sock, STDOUT_FILENO);
 	dup2 (sock, STDERR_FILENO);
@@ -103,11 +105,11 @@ void execute (int sock, User *users)
 void rm_user (int sock, User *users)
 {
 	char	msg[MAX_MSG_SIZE + 1];
+	close (sock);
 	/* broadcast that you're out */
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[sock - 4].name);
 	broadcast (msg, sock, users);
 	/* clear the user entry */
-	close (sock);
 	users[sock - 4].name[0] = 0;
 	users[sock - 4].ip[0] = 0;
 	users[sock - 4].port = 0;
@@ -119,14 +121,16 @@ void rm_user (int sock, User *users)
 void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 {
 	char	msg[MAX_MSG_SIZE + 1];
+
 	/* initialize the user entry */
-	strcpy (users[sock - 4].name, "(no name)");
-	strcpy (users[sock - 4].ip, inet_ntoa (cli_addr->sin_addr));
-	users[sock - 4].port = cli_addr->sin_port;
-	users[sock - 4].connection = 1;
-	users[sock - 4].np = NULL;
-	users[sock - 4].up = calloc (MAX_USERS, sizeof (int));
+	strcpy (users[sock - 4].name, "(no name)");			/* set name */
+	strcpy (users[sock - 4].ip, inet_ntoa (cli_addr->sin_addr));	/* set ip */
+	users[sock - 4].port = cli_addr->sin_port;			/* set port */
+	users[sock - 4].connection = 1;					/* set connection */
+	users[sock - 4].np = NULL;					/* set numbered pipes */
+	users[sock - 4].up = calloc (MAX_USERS, sizeof (int));		/* allocate user pipes */
 	write (sock, motd, strlen(motd));	/* print the welcome message */
+
 	/* broadcast that you're in */
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' entered from %s/%d. ***\n", users[sock - 4].name, users[sock - 4].ip, users[sock - 4].port);
 	broadcast (msg, sock, users);
@@ -174,15 +178,15 @@ int passiveTCP (int port, int qlen)
 	return sockfd;
 }
 
-/* broadcast will not write to the client itself */
 void broadcast (char *msg, int sock, User *users)
 {
 	int	idx;
 	for (idx = 0; idx < MAX_USERS; ++idx) {
+		/* broadcast to on-line clients */
 		if (users[idx].connection > 0) {
 			write (idx + 4, msg, strlen(msg));	/* print the message out */
-			if (idx + 4 != sock)
-				write (idx + 4, prompt, strlen(prompt))	/* show the prompt */;
+			if (idx + 4 != sock)	/* show the prompt for others */
+				write (idx + 4, prompt, strlen(prompt));
 		}
 	}
 }

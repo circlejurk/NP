@@ -35,7 +35,7 @@ int shell (int sock, User *users)
 			/* close numbered pipe for illegal input */
 			close_np (users[sock - 4].np);
 		} else if (readc > 0) {
-			/* save original fds */
+			/* save the client socket fds */
 			save_fds (stdfd);
 			/* add new numbered pipe and set up to output */
 			set_np_out (line, sock, users);
@@ -45,7 +45,7 @@ int shell (int sock, User *users)
 			progc = line_to_cmds (line, cmds);
 			/* execute one line command */
 			execute_one_line (progc, cmds, sock, users);
-			/* restore original fds */
+			/* restore client socket fds */
 			restore_fds (stdfd);
 			/* free the allocated space of commands */
 			clear_cmds (progc, cmds);
@@ -62,7 +62,7 @@ int readline (char *line, int *connection)
 	int	i;
 	char	*p = NULL;
 	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
-	if (ferror (stdin)) {
+	if (ferror (stdin)) {		/* error */
 		clearerr (stdin);
 		fputs ("read error: fgets failed\n", stderr);
 		return -1;
@@ -79,7 +79,6 @@ int readline (char *line, int *connection)
 			return -1;
 		} else if (line[i] == '\r' || line[i] == '\n') {
 			line[i] = 0;
-			line[i + 1] = 0;
 			if (arespace (line))
 				return 0;
 			break;
@@ -91,27 +90,27 @@ int readline (char *line, int *connection)
 void clear_nps (int sock, User *users)
 {
 	int	i;
-	if (users[sock - 4].np) {
+	if (users[sock - 4].np) {	/* if the Npipes exist */
 		for (i = 0; i < MAX_PIPE; ++i) {
-			if (users[sock - 4].np[i].fd) {
-				close (users[sock - 4].np[i].fd[0]);
+			if (users[sock - 4].np[i].fd) {	/* if the numbered pipe exists */
+				close (users[sock - 4].np[i].fd[0]);	/* close the opened pipe */
 				close (users[sock - 4].np[i].fd[1]);
-				free (users[sock - 4].np[i].fd);
-				users[sock - 4].np[i].fd = NULL;
+				free (users[sock - 4].np[i].fd);	/* free the allocated space */
+				users[sock - 4].np[i].fd = NULL;	/* reset to NULL */
 			}
 		}
-		free (users[sock - 4].np);
-		users[sock - 4].np = NULL;
+		free (users[sock - 4].np);	/* free the allocated space for Npipes */
+		users[sock - 4].np = NULL;	/* reset to NULL */
 	}
 }
 
 void close_np (Npipe *np)
 {
-	if (np && np[0].fd) {
-		close (np[0].fd[1]);
+	if (np && np[0].fd) {	/* if the numbered pipe to be received from exists */
+		close (np[0].fd[1]);	/* close the opened pipe */
 		close (np[0].fd[0]);
-		free (np[0].fd);
-		np[0].fd = NULL;
+		free (np[0].fd);	/* free the allocated space */
+		np[0].fd = NULL;	/* reset to NULL */
 	}
 }
 
@@ -119,21 +118,20 @@ void np_countdown (Npipe *np)
 {
 	if (np) {
 		int	i;
-		for (i = 0; i < MAX_PIPE - 1; ++i) {
+		for (i = 0; i < MAX_PIPE - 1; ++i)	/* countdown all the numbered pipe */
 			np[i] = np[i + 1];
-			np[i + 1].fd = NULL;
-		}
+		np[MAX_PIPE - 1].fd = NULL;	/* set the new one to NULL */
 	}
 }
 
 void set_np_in (Npipe *np)
 {
 	if (np && np[0].fd) {
-		close (np[0].fd[1]);
-		dup2 (np[0].fd[0], STDIN_FILENO);
-		close (np[0].fd[0]);
-		free (np[0].fd);
-		np[0].fd = NULL;
+		close (np[0].fd[1]);			/* close the write end of the pipe */
+		dup2 (np[0].fd[0], STDIN_FILENO);	/* duplicate the read end of the pipe to stdin */
+		close (np[0].fd[0]);			/* then close the read end of the pipe */
+		free (np[0].fd);			/* free the allocated space for fds */
+		np[0].fd = NULL;			/* reset to NULL */
 	}
 }
 
@@ -146,7 +144,7 @@ void set_np_out (char *line, int sock, User *users)
 	/* find the numbered pipe in the current input line and add it in */
 	for (i = 0; line[i] != 0; ++i) {
 		if ((line[i] == '|' || line[i] == '!') && isnumber (line + i + 1)) {
-			/* construct the numbered pipe */
+			/* construct the numbered pipe when first use */
 			if (users[sock - 4].np == NULL)
 				users[sock - 4].np = calloc (MAX_PIPE, sizeof (Npipe));
 
@@ -163,12 +161,9 @@ void set_np_out (char *line, int sock, User *users)
 			}
 
 			/* set up the output to pipe */
-			close (STDOUT_FILENO);
-			dup (users[sock - 4].np[number].fd[1]);
-			if (line[i] == '!') {
-				close (STDERR_FILENO);
-				dup (users[sock - 4].np[number].fd[1]);
-			}
+			dup2 (users[sock - 4].np[number].fd[1], STDOUT_FILENO);
+			if (line[i] == '!')
+				dup2 (users[sock - 4].np[number].fd[1], STDERR_FILENO);
 
 			line[i] = 0;
 			break;
@@ -179,39 +174,48 @@ void set_np_out (char *line, int sock, User *users)
 void execute_one_line (int progc, char **cmds, int sock, User *users)
 {
 	pid_t	childpid;
-	int	i, argc, pipefd[2], stdfd[3], stat, userpipe[2], to, from;
-	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0}, *in_file = NULL, *out_file = NULL, ori_cmd[MAX_CMD_SIZE + 1] = {0};
+	int	idx, argc, pipefd[2], stdfd[3], stat, userpipe[2], to, from;
+	char	ori_cmd[MAX_CMD_SIZE + 1] = {0};
+	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0};
+	char	*in_file = NULL, *out_file = NULL;
 
-	/* save original fds */
+	/* save original fds, may the duplicated by numbered pipes */
 	save_fds (stdfd);
 
-	for (i = 0; i < progc; ++i) {
+	for (idx = 0; idx < progc; ++idx) {
 		/* save the original command */
-		strncpy (ori_cmd, cmds[i], MAX_CMD_SIZE + 1);
+		strncpy (ori_cmd, cmds[idx], MAX_CMD_SIZE + 1);
+
 		/* resolve user pipes from commmand */
-		if (resolv_ups (cmds[i], userpipe, &to, &from, sock, users) < 0)
+		if (resolv_ups (cmds[idx], userpipe, &to, &from, sock, users) < 0)
 			break;
-		set_up_from (sock, users, &from, userpipe[0], ori_cmd);
+
 		/* parse the input command into argv */
-		argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
+		argc = cmd_to_argv (cmds[idx], argv, &in_file, &out_file);
+
+		/* set up pipes to read from */
+		set_pipes_in (pipefd, idx);
+		open_files (in_file, NULL);
+		set_up_in (sock, users, &from, userpipe, ori_cmd);
+
 		/* execute the command accordingly */
-		if (*argv != NULL && strcmp (*argv, "exit") == 0) {
+		if (strcmp (argv[0], "exit") == 0) {
 			users[sock - 4].connection = 0;
-		} else if (*argv != NULL && strcmp (*argv, "printenv") == 0) {
+		} else if (strcmp (argv[0], "printenv") == 0) {
 			printenv (argc, argv);
-		} else if (*argv != NULL && strcmp (*argv, "setenv") == 0) {
+		} else if (strcmp (argv[0], "setenv") == 0) {
 			setupenv (argc, argv);
-		} else if (*argv != NULL && strcmp (*argv, "who") == 0) {
+		} else if (strcmp (argv[0], "who") == 0) {
 			who (sock, users);
-		} else if (*argv != NULL && strcmp (*argv, "name") == 0) {
+		} else if (strcmp (argv[0], "name") == 0) {
 			name (sock, users, argv[1]);
-		} else if (*argv != NULL && strcmp (*argv, "tell") == 0) {
+		} else if (strcmp (argv[0], "tell") == 0) {
 			tell (sock, users, argc, argv);
-		} else if (*argv != NULL && strcmp (*argv, "yell") == 0) {
+		} else if (strcmp (argv[0], "yell") == 0) {
 			yell (sock, users, argc, argv);
 		} else {
 			/* create a pipe */
-			if (pipe (pipefd) < 0) {
+			if (idx != progc - 1 && pipe (pipefd) < 0) {
 				fputs ("server error: failed to create pipes\n", stderr);
 				users[sock - 4].connection = 0;
 				return;
@@ -221,21 +225,24 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 				close (pipefd[0]); close (pipefd[1]);
 				fputs ("server error: fork failed\n", stderr);
 			} else if (childpid == 0) {
-				set_pipes_out (pipefd, stdfd, i, progc);
-				open_files (in_file, out_file);
-				set_up_to (sock, users, &to, userpipe[1], ori_cmd);
-				execvpe (*argv, argv, environ);
-				fprintf (stderr, "Unknown command: [%s].\n", *argv);
+				/* set up pipe to write to */
+				set_pipes_out (pipefd, stdfd, idx, progc);
+				open_files (NULL, out_file);
+				set_up_out (sock, users, &to, userpipe, ori_cmd);
+				/* invoke the command */
+				execvpe (argv[0], argv, environ);
+				/* error handling */
+				fprintf (stderr, "Unknown command: [%s].\n", argv[0]);
 				users[sock - 4].connection = -1;
-				i = progc;
+				idx = progc;
 			}
-			if (to)
-				close (userpipe[1]);
-			set_pipes_in (pipefd, stdfd, i, progc);
 			wait (&stat);
 			if (stat != 0)
-				i = progc;
+				idx = progc;
+			if (to)
+				close (userpipe[1]);
 		}
+
 		/* free the allocated space of one command */
 		clear_argv (argc, argv, &in_file, &out_file);
 	}
@@ -244,26 +251,26 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 	restore_fds (stdfd);
 }
 
-void set_up_to (int sock, User *users, int *to, int up_w, char *ori_cmd)
+void set_up_out (int sock, User *users, int *to, int userpipe[2], char *ori_cmd)
 {
 	char	msg[MAX_MSG_SIZE + 1] = {0};
 	/* set up user pipes to pipe to others */
 	if (*to) {
-		dup2 (up_w, STDOUT_FILENO);
-		close (up_w);
+		dup2 (userpipe[1], STDOUT_FILENO);
+		close (userpipe[1]);
 		snprintf (msg, MAX_MSG_SIZE + 1, "*** %s (#%d) just piped '%s' to %s (#%d) ***\n", users[sock - 4].name, sock - 3, ori_cmd, users[*to - 1].name, *to);
 		broadcast (msg, sock, users);
 		*to = 0;
 	}
 }
 
-void set_up_from (int sock, User *users, int *from, int up_r, char *ori_cmd)
+void set_up_in (int sock, User *users, int *from, int userpipe[2], char *ori_cmd)
 {
 	char	msg[MAX_MSG_SIZE + 1] = {0};
 	/* set up user pipes to receive from others */
 	if (*from) {
-		dup2 (up_r, STDIN_FILENO);
-		close (up_r);
+		dup2 (userpipe[0], STDIN_FILENO);
+		close (userpipe[0]);
 		snprintf (msg, MAX_MSG_SIZE + 1, "*** %s (#%d) just received from %s (#%d) by '%s' ***\n", users[sock - 4].name, sock - 3, users[*from - 1].name, *from, ori_cmd);
 		broadcast (msg, sock, users);
 		*from = 0;
@@ -281,12 +288,12 @@ int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *
 		return 0;
 	/* resolve the input command and remove the user pipes' part */
 	for (i = 0; cmd[i] != 0; ++i) {
-		if ((cmd[i] == '>' || cmd[i] == '<') && cmd[i + 1] != ' ') {
+		if ((cmd[i] == '>' || cmd[i] == '<') && !isspace(cmd[i + 1])) {
 			for (j = i + 1; isdigit (cmd[j]); ++j);
 			if (cmd[j] == 0 || isspace (cmd[j])) {
 				strncpy (remain, cmd + j, MAX_CMD_SIZE + 1);
 				cmd[j] = 0;
-				if (cmd[i] == '>') {
+				if (cmd[i] == '>') {	/* pipe to another user */
 					if ((*to = atoi (cmd + i + 1)) > 0) {
 						if (users[*to - 1].connection == 0) {
 							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *to);
@@ -308,7 +315,7 @@ int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *
 							userpipe[1] = pipefd[1];
 						}
 					}
-				} else {
+				} else {	/* receive pipe from another user */
 					if ((*from = atoi (cmd + i + 1)) > 0) {
 						if (users[*from - 1].connection == 0) {
 							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *from);
@@ -338,12 +345,14 @@ int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *
 void clear_ups (int sock, User *users)
 {
 	int	i;
-	for (i = 0; i < MAX_USERS; ++i) {
-		if (users[sock - 4].up[i])
-			close (users[sock - 4].up[i]);
+	if (users[sock - 4].up) {
+		for (i = 0; i < MAX_USERS; ++i) {
+			if (users[sock - 4].up[i])
+				close (users[sock - 4].up[i]);
+		}
+		free (users[sock - 4].up);
+		users[sock - 4].up = NULL;
 	}
-	free (users[sock - 4].up);
-	users[sock - 4].up = NULL;
 }
 
 void yell (int sock, User *users, int argc, char **argv)
@@ -416,28 +425,23 @@ void setupenv (int argc, char **argv)
 
 void set_pipes_out (int *pipefd, int *stdfd, int index, int progc)
 {
-	if (index != progc - 1) {
+	if (index == progc - 1) {
+		dup2 (stdfd[1], STDOUT_FILENO);
+	} else {
 		close (STDOUT_FILENO);
 		dup (pipefd[1]);
-	} else {
-		close (STDOUT_FILENO);
-		dup (stdfd[1]);
+		close (pipefd[0]);
+		close (pipefd[1]);
 	}
-	close (pipefd[0]);
-	close (pipefd[1]);
 }
 
-void set_pipes_in (int *pipefd, int *stdfd, int index, int progc)
+void set_pipes_in (int *pipefd, int index)
 {
-	if (index != progc - 1) {
-		close (STDIN_FILENO);
-		dup (pipefd[0]);
-	} else {
-		close (STDIN_FILENO);
-		dup (stdfd[0]);
+	if (index != 0) {
+		dup2 (pipefd[0], STDIN_FILENO);
+		close (pipefd[0]);
+		close (pipefd[1]);
 	}
-	close (pipefd[0]);
-	close (pipefd[1]);
 }
 
 void save_fds (int *stdfd)
@@ -466,8 +470,7 @@ void open_files (const char *in_file, const char *out_file)
 			fprintf (stderr, "server error: cannot open file %s\n", in_file);
 			exit (1);
 		}
-		close (STDIN_FILENO);
-		dup (infd);
+		dup2 (infd, STDIN_FILENO);
 		close (infd);
 	}
 	if (out_file) {
@@ -476,8 +479,7 @@ void open_files (const char *in_file, const char *out_file)
 			fprintf (stderr, "server error: cannot open file %s\n", out_file);
 			exit (1);
 		}
-		close (STDOUT_FILENO);
-		dup (outfd);
+		dup2 (outfd, STDOUT_FILENO);
 		close (outfd);
 	}
 }

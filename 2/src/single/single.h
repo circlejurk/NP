@@ -45,7 +45,7 @@ int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file);
 void clear_argv (int argc, char **argv, char **in_file, char **out_file);
 void open_files (const char *in_file, const char *out_file);
 void set_pipes_out (int *pipefd, int *stdfd, int index, int progc);
-void set_pipes_in (int *pipefd, int *stdfd, int index, int progc);
+void set_pipes_in (int *pipefd, int index);
 
 void printenv (int argc, char **argv);
 void setupenv (int argc, char **argv);
@@ -55,8 +55,8 @@ void tell (int sock, User *users, int argc, char **argv);
 void yell (int sock, User *users, int argc, char **argv);
 
 int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *users);
-void set_up_to (int sock, User *users, int *to, int up_w, char *ori_cmd);
-void set_up_from (int sock, User *users, int *from, int up_r, char *ori_cmd);
+void set_up_out (int sock, User *users, int *to, int userpipe[2], char *ori_cmd);
+void set_up_in (int sock, User *users, int *from, int userpipe[2], char *ori_cmd);
 void clear_ups (int sock, User *users);
 
 /* implemented in server.c */
