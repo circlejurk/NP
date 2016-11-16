@@ -89,8 +89,8 @@ int readline (char *line, int *connection)
 
 void clear_nps (int sock, User *users)
 {
-	int	i;
 	if (users[sock - 4].np) {	/* if the Npipes exist */
+		int	i;
 		for (i = 0; i < MAX_PIPE; ++i) {
 			if (users[sock - 4].np[i].fd) {	/* if the numbered pipe exists */
 				close (users[sock - 4].np[i].fd[0]);	/* close the opened pipe */
@@ -195,7 +195,6 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 
 		/* set up pipes to read from */
 		set_pipes_in (pipefd, idx);
-		open_files (in_file, NULL);
 		set_up_in (sock, users, &from, userpipe, ori_cmd);
 
 		/* execute the command accordingly */
@@ -224,11 +223,12 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 			if ((childpid = fork()) < 0) {
 				close (pipefd[0]); close (pipefd[1]);
 				fputs ("server error: fork failed\n", stderr);
+				i = progc;
 			} else if (childpid == 0) {
 				/* set up pipe to write to */
 				set_pipes_out (pipefd, stdfd, idx, progc);
-				open_files (NULL, out_file);
 				set_up_out (sock, users, &to, userpipe, ori_cmd);
+				open_files (in_file, out_file);
 				/* invoke the command */
 				execvpe (argv[0], argv, environ);
 				/* error handling */
@@ -428,8 +428,7 @@ void set_pipes_out (int *pipefd, int *stdfd, int index, int progc)
 	if (index == progc - 1) {
 		dup2 (stdfd[1], STDOUT_FILENO);
 	} else {
-		close (STDOUT_FILENO);
-		dup (pipefd[1]);
+		dup2 (pipefd[1], STDOUT_FILENO);
 		close (pipefd[0]);
 		close (pipefd[1]);
 	}
