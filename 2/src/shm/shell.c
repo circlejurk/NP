@@ -23,6 +23,7 @@
 #define __USE_MISC
 #include <sys/shm.h>
 #undef __USE_MISC
+#include <errno.h>
 
 #include "shm.h"
 
@@ -63,7 +64,7 @@ int shell (struct sockaddr_in *addr)
 	write (STDOUT_FILENO, motd, strlen(motd));
 
 	/* add the client into the users */
-	if ((uid = add_user (addr)) < 0) {
+	if (add_user (addr) < 0) {
 		shmdt (users);
 		return -1;
 	}
@@ -99,13 +100,11 @@ int shell (struct sockaddr_in *addr)
 	clear_nps (&np);
 
 	/* remove the user entry from users */
-	rm_user ();
+	if (users[uid].pid == getpid ())
+		rm_user ();
 
 	/* detach the shared memory segment */
-	if (shmdt (users) < 0) {
-		fputs ("server error: shmdt failed\n", stderr);
-		return -1;
-	}
+	shmdt (users);
 
 	return connection;
 }
@@ -113,7 +112,6 @@ int shell (struct sockaddr_in *addr)
 void broadcast (char *msg)
 {
 	int	i, j;
-	strncat (msg, prompt, 3);
 	write (STDOUT_FILENO, msg, strlen (msg));
 	for (i = 0; i < MAX_USERS; ++i) {
 		if (users[i].id > 0 && i != uid) {
@@ -121,6 +119,7 @@ void broadcast (char *msg)
 				if (users[i].msg[uid][j][0] == 0) {
 					strncpy (users[i].msg[uid][j], msg, MAX_MSG_SIZE + 1);
 					kill (users[i].pid, SIGUSR1);
+					break;
 				}
 			}
 		}
@@ -130,6 +129,10 @@ void broadcast (char *msg)
 void rm_user (void)
 {
 	char	msg[MAX_MSG_SIZE + 1];
+	/* close all the fds */
+	close (STDIN_FILENO);
+	close (STDOUT_FILENO);
+	close (STDERR_FILENO);
 	/* broadcast that you're out */
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[uid].name);
 	broadcast (msg);
@@ -139,7 +142,6 @@ void rm_user (void)
 
 int add_user (struct sockaddr_in *addr)
 {
-	int	uid;
 	char	msg[MAX_MSG_SIZE + 1];
 	for (uid = 0; uid < MAX_USERS; ++uid) {
 		if (users[uid].id == 0) {
@@ -166,6 +168,8 @@ int readline (char *line, int *connection)
 	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
 	if (ferror (stdin)) {		/* error */
 		clearerr (stdin);
+		if (errno == EINTR)
+			return 0;
 		fputs ("read error: fgets failed\n", stderr);
 		return -1;
 	} else if (feof (stdin)) {	/* EOF */
@@ -513,7 +517,7 @@ void receiver (int sig)
 			for (j = 0; j < MAX_MSG_NUM; ++j) {
 				if (users[uid].msg[i][j][0] != 0) {
 					write (STDOUT_FILENO, users[uid].msg[i][j], strlen (users[uid].msg[i][j]));
-					users[uid].msg[i][j][0] = 0;
+					memset (users[uid].msg[i][j], 0, MAX_MSG_SIZE);
 				}
 			}
 		}

@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <strings.h>
 #include <unistd.h>
 #define __USE_POSIX
@@ -20,6 +21,7 @@
 void initialize (void);
 void reaper (int sig);
 int passiveTCP (int port, int qlen);
+void create_shm (void);
 
 int main (void)
 {
@@ -36,11 +38,8 @@ int main (void)
 		return -1;
 	}
 
-	/* allocate the shared memory for users () */
-	if (shmget (SHMKEY, MAX_USERS * sizeof (User), PERM | IPC_CREAT) < 0) {
-		fputs ("server error: shmget failed\n", stderr);
-		return -1;
-	}
+	/* create the shared memory for clients */
+	create_shm ();
 
 	while (1) {
 		/* accept connection request */
@@ -115,4 +114,24 @@ int passiveTCP (int port, int qlen)
 	}
 
 	return sockfd;
+}
+
+void create_shm (void)
+{
+	int	shmid = 0;
+	User	*users = NULL;
+	/* allocate the shared memory for users () */
+	if ((shmid = shmget (SHMKEY, MAX_USERS * sizeof (User), PERM | IPC_CREAT)) < 0) {
+		fputs ("server error: shmget failed\n", stderr);
+		exit (1);
+	}
+	/* attach the allocated shared memory */
+	if ((users = (User *) shmat (shmid, NULL, 0)) == (User *) -1) {
+		fputs ("server error: shmat failed\n", stderr);
+		exit (1);
+	}
+	/* set the allocated shared memory segment to zero */
+	memset (users, 0, MAX_USERS * sizeof (User));
+	/* detach the shared memory segment */
+	shmdt (users);
 }
