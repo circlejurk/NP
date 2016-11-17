@@ -390,7 +390,7 @@ void tell (int sock, User *users, int argc, char **argv)
 void name (int sock, User *users, char *new_name)
 {
 	char	msg[MAX_MSG_SIZE + 1];
-	strncpy (users[sock - 4].name, new_name, NAME_SIZE);
+	strncpy (users[sock - 4].name, new_name, NAME_SIZE + 1);
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User from %s/%d is named '%s'. ***\n", users[sock - 4].ip, users[sock - 4].port, users[sock - 4].name);
 	broadcast (msg, sock, users);
 }
