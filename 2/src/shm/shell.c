@@ -305,8 +305,8 @@ void execute_one_line (int progc, char **cmds, int *connection)
 			name (argv[1]);
 		/*} else if (strcmp (argv[0], "tell") == 0) {*/
 			/*tell (argc, argv);*/
-		/*} else if (strcmp (argv[0], "yell") == 0) {*/
-			/*yell (argc, argv);*/
+		} else if (strcmp (argv[0], "yell") == 0) {
+			yell (argc, argv);
 		} else {
 			/* create a pipe */
 			if (i != progc - 1 && pipe (pipefd) < 0) {
@@ -341,6 +341,22 @@ void execute_one_line (int progc, char **cmds, int *connection)
 
 	/* restore original fds */
 	restore_fds (stdfd);
+}
+
+void yell (int argc, char **argv)
+{
+	int	i;
+	char	*msg = malloc (strlen (users[uid].name) + 17 + MAX_MSG_SIZE + 1);
+	sprintf (msg, "*** %s yelled ***: ", users[uid].name);
+	for (i = 1; i < argc; ++i) {
+		strcat (msg, argv[i]);
+		if (i == argc - 1)
+			strcat (msg, "\n");
+		else
+			strcat (msg, " ");
+	}
+	broadcast (msg);
+	free (msg);
 }
 
 void name (char *new_name)
