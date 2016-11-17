@@ -361,7 +361,15 @@ void yell (int argc, char **argv)
 
 void name (char *new_name)
 {
+	int	idx;
 	char	msg[MAX_MSG_SIZE + 1];
+	for (idx = 0; idx < MAX_USERS; ++idx) {
+		if (users[idx].id > 0 && idx != uid && strcmp (users[idx].name, new_name) == 0) {
+			snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' already exists. ***\n", new_name);
+			write (STDOUT_FILENO, msg, strlen (msg));
+			return;
+		}
+	}
 	strncpy (users[uid].name, new_name, NAME_SIZE + 1);
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User from %s/%d is named '%s'. ***\n", users[uid].ip, users[uid].port, users[uid].name);
 	broadcast (msg);
@@ -371,6 +379,8 @@ void who (void)
 {
 	int	idx;
 	char	msg[MAX_MSG_SIZE + 1];
+	snprintf (msg, MAX_MSG_SIZE + 1, "<ID>\t<nickname>\t<IP/port>\t<indicate me>\n");
+	write (STDOUT_FILENO, msg, strlen (msg));
 	for (idx = 0; idx < MAX_USERS; ++idx) {
 		if (users[idx].id > 0) {
 			if (strlen (users[idx].name) < 8)
