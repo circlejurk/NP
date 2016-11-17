@@ -32,8 +32,8 @@ const char motd[] =	"****************************************\n"
 			"****************************************\n\n";
 const char prompt[] = "% ";
 
-int	shmid = 0, uid = 0;
-User	*users = NULL;
+static int	shmid = 0, uid = 0;
+static User	*users = NULL;
 
 int shell (struct sockaddr_in *addr)
 {
@@ -299,6 +299,14 @@ void execute_one_line (int progc, char **cmds, int *connection)
 			printenv (argc, argv);
 		} else if (strcmp (argv[0], "setenv") == 0) {
 			setupenv (argc, argv);
+		} else if (strcmp (argv[0], "who") == 0) {
+			who ();
+		} else if (strcmp (argv[0], "name") == 0) {
+			name (argv[1]);
+		/*} else if (strcmp (argv[0], "tell") == 0) {*/
+			/*tell (argc, argv);*/
+		/*} else if (strcmp (argv[0], "yell") == 0) {*/
+			/*yell (argc, argv);*/
 		} else {
 			/* create a pipe */
 			if (i != progc - 1 && pipe (pipefd) < 0) {
@@ -333,6 +341,33 @@ void execute_one_line (int progc, char **cmds, int *connection)
 
 	/* restore original fds */
 	restore_fds (stdfd);
+}
+
+void name (char *new_name)
+{
+	char	msg[MAX_MSG_SIZE + 1];
+	strncpy (users[uid].name, new_name, NAME_SIZE + 1);
+	snprintf (msg, MAX_MSG_SIZE + 1, "*** User from %s/%d is named '%s'. ***\n", users[uid].ip, users[uid].port, users[uid].name);
+	broadcast (msg);
+}
+
+void who (void)
+{
+	int	idx;
+	char	msg[MAX_MSG_SIZE + 1];
+	for (idx = 0; idx < MAX_USERS; ++idx) {
+		if (users[idx].id > 0) {
+			if (strlen (users[idx].name) < 8)
+				snprintf (msg, MAX_MSG_SIZE + 1, "%d\t%s\t\t%s/%d", users[idx].id, users[idx].name, users[idx].ip, users[idx].port);
+			else
+				snprintf (msg, MAX_MSG_SIZE + 1, "%d\t%s\t%s/%d", users[idx].id, users[idx].name, users[idx].ip, users[idx].port);
+			if (idx == uid)
+				strcat (msg, "\t\t<- me\n");
+			else
+				strcat (msg, "\n");
+			write (STDOUT_FILENO, msg, strlen(msg));
+		}
+	}
 }
 
 void setupenv (int argc, char **argv)

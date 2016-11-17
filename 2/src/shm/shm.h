@@ -56,5 +56,7 @@ void setupenv (int argc, char **argv);
 int add_user (struct sockaddr_in *addr);
 void rm_user (void);
 void broadcast (char *msg);
+void who (void);
+void name (char *new_name);
 
 void receiver (int sig);
