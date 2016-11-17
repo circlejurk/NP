@@ -223,7 +223,7 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 			if ((childpid = fork()) < 0) {
 				close (pipefd[0]); close (pipefd[1]);
 				fputs ("server error: fork failed\n", stderr);
-				i = progc;
+				idx = progc;
 			} else if (childpid == 0) {
 				/* set up pipe to write to */
 				set_pipes_out (pipefd, stdfd, idx, progc);
