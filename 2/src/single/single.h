@@ -14,7 +14,7 @@ typedef struct numbered_pipe {
 } Npipe;
 
 typedef struct user {
-	char	name[NAME_SIZE];	/* client's name */
+	char	name[NAME_SIZE + 1];	/* client's name */
 	char	ip[16];			/* client's ip */
 	int	port;			/* client's port */
 	int	connection;		/* client's connection status, 1: on, 0: off, -1: err */

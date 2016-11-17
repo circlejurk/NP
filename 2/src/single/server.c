@@ -64,8 +64,8 @@ int main (void)
 				fputs ("server error: accept failed\n", stderr);
 				return -1;
 			} else if (ssock >= MAX_USERS + 4) {
-				write (ssock, "It's full now...\n"
-					"You may try again after a while.\n", 50);
+				write (ssock, "The server is full.\n"
+					"Please try again later...\n", 46);
 				close (ssock);
 			} else {
 				FD_SET (ssock, &afds);		/* add an active socket */
