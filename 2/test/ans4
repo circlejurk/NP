@@ -85,12 +85,12 @@ login4
 
 2 % number <1
 1| *** FruitBuffet (#2) just received from Egglet (#1) by 'number <1' ***
+2| *** FruitBuffet (#2) just received from Egglet (#1) by 'number <1' ***
 2|    1    1 <!test.html>
 2|    2    2 <TITLE>Test<TITLE>
 2|    3    3 <BODY>This is a <b>test</b> program
 2|    4    4 for ras.
 2|    5    5 </BODY>
-2| *** FruitBuffet (#2) just received from Egglet (#1) by 'number <1' ***
 2| % 
 3| *** FruitBuffet (#2) just received from Egglet (#1) by 'number <1' ***
 4| *** FruitBuffet (#2) just received from Egglet (#1) by 'number <1' ***
@@ -109,12 +109,12 @@ login4
 3 % number <2
 1| *** GingerCookies (#3) just received from FruitBuffet (#2) by 'number <2' ***
 2| *** GingerCookies (#3) just received from FruitBuffet (#2) by 'number <2' ***
+3| *** GingerCookies (#3) just received from FruitBuffet (#2) by 'number <2' ***
 3|    1 <!test.html>
 3|    2 <TITLE>Test<TITLE>
 3|    3 <BODY>This is a <b>test</b> program
 3|    4 for ras.
 3|    5 </BODY>
-3| *** GingerCookies (#3) just received from FruitBuffet (#2) by 'number <2' ***
 3| % 
 4| *** GingerCookies (#3) just received from FruitBuffet (#2) by 'number <2' ***
 
@@ -144,13 +144,13 @@ login4
 1| *** HotCakes (#4) just received from GingerCookies (#3) by 'number <3' ***
 2| *** HotCakes (#4) just received from GingerCookies (#3) by 'number <3' ***
 3| *** HotCakes (#4) just received from GingerCookies (#3) by 'number <3' ***
+4| *** HotCakes (#4) just received from GingerCookies (#3) by 'number <3' ***
 4|    1 baozi
 4|    2 bin
 4|    3 ls.txt
 4|    4 test.html
 4|    5 test1.txt
 4|    6 test2.txt
-4| *** HotCakes (#4) just received from GingerCookies (#3) by 'number <3' ***
 4| % 
 
 4 % cat <3
@@ -160,12 +160,12 @@ login4
 3 % cat <1
 1| *** GingerCookies (#3) just received from Egglet (#1) by 'cat <1' ***
 2| *** GingerCookies (#3) just received from Egglet (#1) by 'cat <1' ***
+3| *** GingerCookies (#3) just received from Egglet (#1) by 'cat <1' ***
 3| <!test.html>
 3| <TITLE>Test<TITLE>
 3| <BODY>This is a <b>test</b> program
 3| for ras.
 3| </BODY>
-3| *** GingerCookies (#3) just received from Egglet (#1) by 'cat <1' ***
 3| % 
 4| *** GingerCookies (#3) just received from Egglet (#1) by 'cat <1' ***
 
