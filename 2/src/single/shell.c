@@ -375,21 +375,34 @@ void tell (int sock, User *users, int argc, char **argv)
 {
 	int	i, to_sock = atoi (argv[1]) + 3;
 	char	*msg = malloc (strlen (users[sock - 4].name) + 19 + MAX_MSG_SIZE + 1);
-	sprintf (msg, "*** %s told you ***: ", users[sock - 4].name);
-	for (i = 2; i < argc; ++i) {
-		strcat (msg, argv[i]);
-		if (i == argc - 1)
-			strcat (msg, "\n% ");
-		else
-			strcat (msg, " ");
+	if (users[to_sock - 4].connection) {
+		sprintf (msg, "*** %s told you ***: ", users[sock - 4].name);
+		for (i = 2; i < argc; ++i) {
+			strcat (msg, argv[i]);
+			if (i == argc - 1)
+				strcat (msg, "\n% ");
+			else
+				strcat (msg, " ");
+		}
+		write (to_sock, msg, strlen (msg));
+	} else {
+		sprintf (msg, "*** Error: user #%d does not exist yet. ***\n", to_sock - 3);
+		write (STDERR_FILENO, msg, strlen (msg));
 	}
-	write (to_sock, msg, strlen (msg));
 	free (msg);
 }
 
 void name (int sock, User *users, char *new_name)
 {
+	int	idx;
 	char	msg[MAX_MSG_SIZE + 1];
+	for (idx = 0; idx < MAX_USERS; ++idx) {
+		if (users[idx].connection > 0 && idx != sock - 4 && strcmp (users[idx].name, new_name) == 0) {
+			snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' already exists. ***\n", new_name);
+			write (STDOUT_FILENO, msg, strlen (msg));
+			return;
+		}
+	}
 	strncpy (users[sock - 4].name, new_name, NAME_SIZE + 1);
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User from %s/%d is named '%s'. ***\n", users[sock - 4].ip, users[sock - 4].port, users[sock - 4].name);
 	broadcast (msg, sock, users);
@@ -399,6 +412,8 @@ void who (int sock, User *users)
 {
 	int	idx;
 	char	msg[MAX_MSG_SIZE + 1];
+	snprintf (msg, MAX_MSG_SIZE + 1, "<ID>\t<nickname>\t<IP/port>\t<indicate me>\n");
+	write (STDOUT_FILENO, msg, strlen (msg));
 	for (idx = 0; idx < MAX_USERS; ++idx) {
 		if (users[idx].connection > 0) {
 			if (strlen (users[idx].name) < 8)
