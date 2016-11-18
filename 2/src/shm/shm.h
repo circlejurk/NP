@@ -59,5 +59,6 @@ void broadcast (char *msg);
 void who (void);
 void name (char *new_name);
 void yell (int argc, char **argv);
+void tell (int argc, char **argv);
 
 void receiver (int sig);

@@ -303,8 +303,8 @@ void execute_one_line (int progc, char **cmds, int *connection)
 			who ();
 		} else if (strcmp (argv[0], "name") == 0) {
 			name (argv[1]);
-		/*} else if (strcmp (argv[0], "tell") == 0) {*/
-			/*tell (argc, argv);*/
+		} else if (strcmp (argv[0], "tell") == 0) {
+			tell (argc, argv);
 		} else if (strcmp (argv[0], "yell") == 0) {
 			yell (argc, argv);
 		} else {
@@ -341,6 +341,33 @@ void execute_one_line (int progc, char **cmds, int *connection)
 
 	/* restore original fds */
 	restore_fds (stdfd);
+}
+
+void tell (int argc, char **argv)
+{
+	int	i, to = atoi (argv[1]);
+	char	*msg = malloc (strlen (users[uid].name) + 19 + MAX_MSG_SIZE + 1);
+	if (to > 0 && users[to - 1].id) {
+		sprintf (msg, "*** %s told you ***: ", users[uid].name);
+		for (i = 2; i < argc; ++i) {
+			strcat (msg, argv[i]);
+			if (i == argc - 1)
+				strcat (msg, "\n");
+			else
+				strcat (msg, " ");
+		}
+		for (i = 0; i < MAX_MSG_NUM; ++i) {
+			if (users[to - 1].msg[uid][i][0] == 0) {
+				strncpy (users[to - 1].msg[uid][i], msg, MAX_MSG_SIZE + 1);
+				kill (users[to - 1].pid, SIGUSR1);
+				break;
+			}
+		}
+	} else {
+		sprintf (msg, "*** Error: user #%d does not exist yet. ***\n", to);
+		write (STDERR_FILENO, msg, strlen (msg));
+	}
+	free (msg);
 }
 
 void yell (int argc, char **argv)
