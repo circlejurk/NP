@@ -89,34 +89,6 @@ int shell (struct sockaddr_in *addr)
 	return connection;
 }
 
-void initialize (void)
-{
-	/* get the shared memory for users */
-	if ((shmid = shmget (SHMKEY, MAX_USERS * sizeof (User), PERM)) < 0) {
-		fputs ("server error: shmget failed\n", stderr);
-		return -1;
-	}
-
-	/* attach the allocated shared memory */
-	if ((users = (User *) shmat (shmid, NULL, 0)) == (User *) -1) {
-		fputs ("server error: shmat failed\n", stderr);
-		return -1;
-	}
-
-	/* initialize the original directory */
-	/*chdir ("/u/cs/103/0310004/rwg");*/
-
-	/* initialize the environment variables */
-	clearenv ();
-	putenv ("PATH=bin:.");
-
-	/* establish a signal handler to receive messages from others */
-	signal (SIGUSR1, receiver);
-
-	/* print the welcome message */
-	write (STDOUT_FILENO, motd, strlen(motd));
-}
-
 void broadcast (char *msg)
 {
 	int	i, j;
@@ -619,4 +591,32 @@ void receiver (int sig)
 		}
 	}
 	signal (SIGUSR1, receiver);
+}
+
+void initialize (void)
+{
+	/* get the shared memory for users */
+	if ((shmid = shmget (SHMKEY, MAX_USERS * sizeof (User), PERM)) < 0) {
+		fputs ("server error: shmget failed\n", stderr);
+		exit (1);
+	}
+
+	/* attach the allocated shared memory */
+	if ((users = (User *) shmat (shmid, NULL, 0)) == (User *) -1) {
+		fputs ("server error: shmat failed\n", stderr);
+		exit (1);
+	}
+
+	/* initialize the original directory */
+	/*chdir ("/u/cs/103/0310004/rwg");*/
+
+	/* initialize the environment variables */
+	clearenv ();
+	putenv ("PATH=bin:.");
+
+	/* establish a signal handler to receive messages from others */
+	signal (SIGUSR1, receiver);
+
+	/* print the welcome message */
+	write (STDOUT_FILENO, motd, strlen(motd));
 }
