@@ -18,7 +18,6 @@
 
 #include "shm.h"
 
-void initialize (void);
 void reaper (int sig);
 int passiveTCP (int port, int qlen);
 void create_shm (void);
@@ -30,7 +29,8 @@ int main (void)
 	pid_t			childpid;
 	struct sockaddr_in	cli_addr;
 
-	initialize ();	/* server initialization */
+	/* establish a signal handler to wait for child processes */
+	signal (SIGCHLD, reaper);
 
 	/* build a TCP connection */
 	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0) {
@@ -67,14 +67,6 @@ int main (void)
 	}
 
 	return 0;
-}
-
-void initialize (void)
-{
-	/* initialize the original directory */
-	/*chdir ("/u/cs/103/0310004/rwg");*/
-	/* establish a signal handler to wait for child processes */
-	signal (SIGCHLD, reaper);
 }
 
 void reaper (int sig)

@@ -27,6 +27,7 @@ typedef struct user {
 } User;
 
 int shell (struct sockaddr_in *addr);
+void initialize (void);
 
 void save_fds (int *stdfd);
 void restore_fds (int *stdfd);
