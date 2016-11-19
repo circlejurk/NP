@@ -94,6 +94,7 @@ void broadcast (char *msg)
 {
 	int	i, j;
 	write (STDOUT_FILENO, msg, strlen (msg));
+	strncat (msg, "% ", 3);
 	for (i = 0; i < MAX_USERS; ++i) {
 		if (users[i].id > 0 && i != uid) {
 			for (j = 0; j < MAX_MSG_NUM; ++j) {
@@ -146,11 +147,12 @@ int readline (char *line, int *connection)
 {
 	int	i;
 	char	*p = NULL;
+re_read:
 	p = fgets (line, MAX_LINE_SIZE + 1, stdin);
 	if (ferror (stdin)) {		/* error */
 		clearerr (stdin);
 		if (errno == EINTR)
-			return 0;
+			goto re_read;
 		fputs ("read error: fgets failed\n", stderr);
 		return -1;
 	} else if (feof (stdin)) {	/* EOF */
