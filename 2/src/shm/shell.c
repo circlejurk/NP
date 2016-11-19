@@ -374,40 +374,6 @@ void set_up_in (int *from, char *ori_cmd)
 	}
 }
 
-int resolv_ups (char *cmd, int *ofd, int *to, int *from)
-{
-	int	i, j;
-	char	remain[MAX_CMD_SIZE + 1];
-	/* initialize the values */
-	*ofd = *to = *from = 0;
-	/* check if it's yell command */
-	if (cmd[0] == 'y' && cmd[1] == 'e' && cmd[2] == 'l' && cmd[3] == 'l' && isspace (cmd[4]))
-		return 0;
-	/* resolve the input command and remove the user pipes' part */
-	for (i = 0; cmd[i] != 0; ++i) {
-		if ((cmd[i] == '>' || cmd[i] == '<') && !isspace(cmd[i + 1])) {
-			for (j = i + 1; isdigit (cmd[j]); ++j);
-			if (cmd[j] == 0 || isspace (cmd[j])) {
-				strncpy (remain, cmd + j, MAX_CMD_SIZE + 1);
-				cmd[j] = 0;
-				/* pipe to another user */
-				if (cmd[i] == '>' && (*to = atoi (cmd + i + 1)) > 0) {	/* check if it's a valid id */
-					if (open_up_out (ofd, to) < 0)
-						return -1;
-				/* receive pipe from another user */
-				} else if ((*from = atoi (cmd + i + 1)) > 0) {	/* check if it's a valid id */
-					if (open_up_in (from) < 0)
-						return -1;
-				}
-				cmd[i] = ' ';
-				cmd[i + 1] = 0;
-				strcat (cmd, remain);
-			}
-		}
-	}
-	return 0;
-}
-
 int open_up_out (int *ofd, int *to)
 {
 	char	msg[MAX_MSG_SIZE + 1], fifo[FIFO_NAME_SIZE + 1];
@@ -458,6 +424,40 @@ int open_up_in (int *from)
 		write (STDERR_FILENO, msg, strlen (msg));
 		*from = 0;
 		return -1;
+	}
+	return 0;
+}
+
+int resolv_ups (char *cmd, int *ofd, int *to, int *from)
+{
+	int	i, j;
+	char	remain[MAX_CMD_SIZE + 1];
+	/* initialize the values */
+	*ofd = *to = *from = 0;
+	/* check if it's yell command */
+	if (cmd[0] == 'y' && cmd[1] == 'e' && cmd[2] == 'l' && cmd[3] == 'l' && isspace (cmd[4]))
+		return 0;
+	/* resolve the input command and remove the user pipes' part */
+	for (i = 0; cmd[i] != 0; ++i) {
+		if ((cmd[i] == '>' || cmd[i] == '<') && !isspace(cmd[i + 1])) {
+			for (j = i + 1; isdigit (cmd[j]); ++j);
+			if (cmd[j] == 0 || isspace (cmd[j])) {
+				strncpy (remain, cmd + j, MAX_CMD_SIZE + 1);
+				cmd[j] = 0;
+				/* pipe to another user */
+				if (cmd[i] == '>' && (*to = atoi (cmd + i + 1)) > 0) {	/* check if it's a valid id */
+					if (open_up_out (ofd, to) < 0)
+						return -1;
+				/* receive pipe from another user */
+				} else if ((*from = atoi (cmd + i + 1)) > 0) {	/* check if it's a valid id */
+					if (open_up_in (from) < 0)
+						return -1;
+				}
+				cmd[i] = ' ';
+				cmd[i + 1] = 0;
+				strcat (cmd, remain);
+			}
+		}
 	}
 	return 0;
 }
