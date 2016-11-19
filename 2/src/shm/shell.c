@@ -31,6 +31,7 @@ const char motd[] =	"****************************************\n"
 			"** Welcome to the information server. **\n"
 			"****************************************\n\n";
 const char prompt[] = "% ";
+const char base_dir[] = "/u/cs/103/0310004";
 
 static int	shmid = 0, uid = 0;
 static User	*users = NULL;
@@ -258,7 +259,8 @@ void set_np_out (char *line, Npipe **np, int *connection)
 void execute_one_line (int progc, char **cmds, int *connection)
 {
 	pid_t	childpid;
-	int	i, argc, pipefd[2], stdfd[3], stat;
+	int	i, argc, pipefd[2], stdfd[3], stat, ofd, to, from;
+	char	ori_cmd[MAX_CMD_SIZE + 1] = {0};
 	char	*argv[MAX_CMD_SIZE / 2 + 1] = {0};
 	char	*in_file = NULL, *out_file = NULL;
 
@@ -266,11 +268,19 @@ void execute_one_line (int progc, char **cmds, int *connection)
 	save_fds (stdfd);
 
 	for (i = 0; i < progc; ++i) {
+		/* save the original command */
+		strncpy (ori_cmd, cmds[i], MAX_CMD_SIZE + 1);
+
+		/* resolve user pipes from commmand */
+		if (resolv_ups (cmds[i], &ofd, &to, &from) < 0)
+			break;
+
 		/* parse the input command into argv */
 		argc = cmd_to_argv (cmds[i], argv, &in_file, &out_file);
 
 		/* set up pipes to read from */
 		set_pipes_in (pipefd, i);
+		set_up_in (&from, ori_cmd);
 
 		/* execute the command accordingly */
 		if (strcmp (argv[0], "exit") == 0) {
@@ -302,6 +312,7 @@ void execute_one_line (int progc, char **cmds, int *connection)
 			} else if (childpid == 0) {
 				/* set up pipe to write to */
 				set_pipes_out (pipefd, stdfd, i, progc);
+				set_up_out (&to, &ofd, ori_cmd);
 				open_files (in_file, out_file);
 				/* invoke the command */
 				execvpe (*argv, argv, environ);
@@ -315,12 +326,138 @@ void execute_one_line (int progc, char **cmds, int *connection)
 				i = progc;
 		}
 
+		/* close open fifo fds, remove the input fifo */
+		clear_fifo (&to, &from, &ofd);
+
 		/* free the allocated space of one command */
 		clear_argv (argc, argv, &in_file, &out_file);
 	}
 
 	/* restore original fds */
 	restore_fds (stdfd);
+}
+
+void clear_fifo (int *to, int *from, int *ofd)
+{
+	if (*to)
+		close (*ofd);
+	if (users[uid].fifo[*from - 1].fd) {
+		unlink (users[uid].fifo[*from - 1].name);
+		memset (&users[uid].fifo[*from - 1], 0, sizeof (FIFO));
+	}
+}
+
+void set_up_out (int *to, int *ofd, char *ori_cmd)
+{
+	char	msg[MAX_MSG_SIZE + 1] = {0};
+	/* set up user pipes to pipe to others */
+	if (*to) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** %s (#%d) just piped '%s' to %s (#%d) ***\n", users[uid].name, users[uid].id, ori_cmd, users[*to - 1].name, *to);
+		broadcast (msg);
+		dup2 (*ofd, STDOUT_FILENO);
+		close (*ofd);
+		*to = 0;
+	}
+}
+
+void set_up_in (int *from, char *ori_cmd)
+{
+	char	msg[MAX_MSG_SIZE + 1] = {0};
+	/* set up user pipes to receive from others */
+	if (*from) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** %s (#%d) just received from %s (#%d) by '%s' ***\n", users[uid].name, users[uid].id, users[*from - 1].name, *from, ori_cmd);
+		broadcast (msg);
+		dup2 (users[uid].fifo[*from - 1].fd, STDIN_FILENO);
+		close (users[uid].fifo[*from - 1].fd);
+	}
+}
+
+int resolv_ups (char *cmd, int *ofd, int *to, int *from)
+{
+	int	i, j;
+	char	remain[MAX_CMD_SIZE + 1];
+	/* initialize the values */
+	*ofd = *to = *from = 0;
+	/* check if it's yell command */
+	if (cmd[0] == 'y' && cmd[1] == 'e' && cmd[2] == 'l' && cmd[3] == 'l' && isspace (cmd[4]))
+		return 0;
+	/* resolve the input command and remove the user pipes' part */
+	for (i = 0; cmd[i] != 0; ++i) {
+		if ((cmd[i] == '>' || cmd[i] == '<') && !isspace(cmd[i + 1])) {
+			for (j = i + 1; isdigit (cmd[j]); ++j);
+			if (cmd[j] == 0 || isspace (cmd[j])) {
+				strncpy (remain, cmd + j, MAX_CMD_SIZE + 1);
+				cmd[j] = 0;
+				/* pipe to another user */
+				if (cmd[i] == '>' && (*to = atoi (cmd + i + 1)) > 0) {	/* check if it's a valid id */
+					if (open_up_out (ofd, to) < 0)
+						return -1;
+				/* receive pipe from another user */
+				} else if ((*from = atoi (cmd + i + 1)) > 0) {	/* check if it's a valid id */
+					if (open_up_in (from) < 0)
+						return -1;
+				}
+				cmd[i] = ' ';
+				cmd[i + 1] = 0;
+				strcat (cmd, remain);
+			}
+		}
+	}
+	return 0;
+}
+
+int open_up_out (int *ofd, int *to)
+{
+	char	msg[MAX_MSG_SIZE + 1], fifo[FIFO_NAME_SIZE + 1];
+	/* check if the client is on line */
+	if (users[*to - 1].id == 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *to);
+		write (STDERR_FILENO, msg, strlen (msg));
+		*to = 0;
+		return -1;
+	/* check the existence of the fifo */
+	} else if (users[*to - 1].fifo[uid].fd != 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the pipe #%d->#%d already exists. ***\n", users[uid].id, *to);
+		write (STDERR_FILENO, msg, strlen (msg));
+		*to = 0;
+		return -1;
+	}
+	/* make up the fifo name */
+	strncpy (msg, base_dir, FIFO_NAME_SIZE + 1);
+	strcat (msg, "/fifo/%d->%d");
+	snprintf (fifo, FIFO_NAME_SIZE + 1, msg, users[uid].id, *to);
+	/* create the fifo */
+	if (mkfifo (fifo, 0600) < 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "error: failed to create FIFO\n");
+		write (STDERR_FILENO, msg, strlen (msg));
+		*to = 0;
+		return -1;
+	} else {
+		/* open the fifo to write to */
+		strncpy (users[*to - 1].fifo[uid].name, fifo, FIFO_NAME_SIZE + 1);
+		kill (users[*to - 1].pid, SIGUSR2);
+		*ofd = open (fifo, O_WRONLY);
+	}
+	return 0;
+}
+
+int open_up_in (int *from)
+{
+	char	msg[MAX_MSG_SIZE + 1];
+	/* check the client is on line */
+	if (users[*from - 1].id == 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *from);
+		write (STDERR_FILENO, msg, strlen (msg));
+		*from = 0;
+		return -1;
+	/* check the existence of the fifo */
+	} else if (users[uid].fifo[*from - 1].fd == 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the pipe #%d->#%d does not exist yet. ***\n", *from, users[uid].id);
+		write (STDERR_FILENO, msg, strlen (msg));
+		*from = 0;
+		return -1;
+	}
+	return 0;
 }
 
 void tell (int argc, char **argv)
@@ -577,9 +714,9 @@ int arespace (char *s)
 	return 1;	/* empty strings are treated as spaces */
 }
 
-void receiver (int sig)
+void sig_handler (int sig)
 {
-	if (sig == SIGUSR1) {
+	if (sig == SIGUSR1) {	/* receive messages from others */
 		int	i, j;
 		for (i = 0; i < MAX_USERS; ++i) {
 			for (j = 0; j < MAX_MSG_NUM; ++j) {
@@ -589,12 +726,20 @@ void receiver (int sig)
 				}
 			}
 		}
+	} else if (sig == SIGUSR2) {	/* open fifos to read from */
+		int	i;
+		for (i = 0; i < MAX_USERS; ++i) {
+			if (users[uid].fifo[i].fd == 0 && users[uid].fifo[i].name[0] != 0)
+				users[uid].fifo[i].fd = open (users[uid].fifo[i].name, O_RDONLY | O_NONBLOCK);
+		}
 	}
-	signal (SIGUSR1, receiver);
+	signal (sig, sig_handler);
 }
 
 void initialize (void)
 {
+	char	*wd = malloc (strlen (base_dir) + 5);
+
 	/* get the shared memory for users */
 	if ((shmid = shmget (SHMKEY, MAX_USERS * sizeof (User), PERM)) < 0) {
 		fputs ("server error: shmget failed\n", stderr);
@@ -608,14 +753,18 @@ void initialize (void)
 	}
 
 	/* initialize the original directory */
-	/*chdir ("/u/cs/103/0310004/rwg");*/
+	strcpy (wd, base_dir);
+	strcat (wd, "/rwg");
+	chdir (wd);
+	free (wd);
 
 	/* initialize the environment variables */
 	clearenv ();
 	putenv ("PATH=bin:.");
 
-	/* establish a signal handler to receive messages from others */
-	signal (SIGUSR1, receiver);
+	/* establish signal handlers */
+	signal (SIGUSR1, sig_handler);	/* receive messages from others */
+	signal (SIGUSR2, sig_handler);	/* open fifos to read from */
 
 	/* print the welcome message */
 	write (STDOUT_FILENO, motd, strlen(motd));

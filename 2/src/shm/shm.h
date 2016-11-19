@@ -10,12 +10,18 @@
 #define MAX_MSG_NUM	10	/* one chat buffer has at most 10 unread messages */
 #define MAX_MSG_SIZE	1024	/* one message has at most 1024 bytes */
 #define NAME_SIZE	20
+#define FIFO_NAME_SIZE	64
 
-extern const char motd[], prompt[];
+extern const char motd[], prompt[], base_dir[];
 
 typedef struct numbered_pipe {
 	int	*fd;
 } Npipe;
+
+typedef struct fifo {
+	int	fd;
+	char	name[FIFO_NAME_SIZE + 1];
+} FIFO;
 
 typedef struct user {
 	int	id;
@@ -24,6 +30,7 @@ typedef struct user {
 	char	ip[16];
 	int	port;
 	char	msg[MAX_USERS][MAX_MSG_NUM][MAX_MSG_SIZE + 1];
+	FIFO	fifo[MAX_USERS];
 } User;
 
 int shell (struct sockaddr_in *addr);
@@ -62,4 +69,11 @@ void name (char *new_name);
 void yell (int argc, char **argv);
 void tell (int argc, char **argv);
 
-void receiver (int sig);
+void sig_handler (int sig);
+
+int resolv_ups (char *cmd, int *ofd, int *to, int *from);
+int open_up_out (int *ofd, int *to);
+int open_up_in (int *from);
+void set_up_out (int *to, int *ofd, char *ori_cmd);
+void set_up_in (int *from, char *ori_cmd);
+void clear_fifo (int *to, int *from, int *ofd);
