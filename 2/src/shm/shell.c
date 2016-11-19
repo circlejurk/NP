@@ -111,13 +111,13 @@ void broadcast (char *msg)
 void rm_user (void)
 {
 	char	msg[MAX_MSG_SIZE + 1];
+	/* broadcast that you're out */
+	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[uid].name);
+	broadcast (msg);
 	/* close all the fds */
 	close (STDIN_FILENO);
 	close (STDOUT_FILENO);
 	close (STDERR_FILENO);
-	/* broadcast that you're out */
-	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[uid].name);
-	broadcast (msg);
 	/* clear the user entry */
 	memset (&users[uid], 0, sizeof (User));
 }

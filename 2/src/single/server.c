@@ -106,10 +106,10 @@ void rm_user (int sock, User *users)
 {
 	char	msg[MAX_MSG_SIZE + 1];
 
-	close (sock);
 	/* broadcast that you're out */
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[sock - 4].name);
 	broadcast (msg, sock, users);
+	close (sock);
 
 	/* clear the user entry */
 	clear_nps (sock, users);	/* free the allocated spaces of numbered pipes */
