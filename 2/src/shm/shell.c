@@ -762,7 +762,7 @@ void initialize (void)
 
 	/* initialize the environment variables */
 	clearenv ();
-	putenv ("PATH=bin:.");
+	setenv ("PATH", "bin:.", 1);
 
 	/* establish signal handlers */
 	signal (SIGUSR1, sig_handler);	/* receive messages from others */
