@@ -110,14 +110,22 @@ void broadcast (char *msg)
 
 void rm_user (void)
 {
+	int	i;
 	char	msg[MAX_MSG_SIZE + 1];
 	/* broadcast that you're out */
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[uid].name);
 	broadcast (msg);
-	/* close all the fds */
+	/* close the fds */
 	close (STDIN_FILENO);
 	close (STDOUT_FILENO);
 	close (STDERR_FILENO);
+	/* close fifo fds */
+	for (i = 0; i < MAX_USERS; ++i) {
+		if (users[uid].fifo[i].fd) {
+			close (users[uid].fifo[i].fd);
+			unlink (users[uid].fifo[i].name);
+		}
+	}
 	/* clear the user entry */
 	memset (&users[uid], 0, sizeof (User));
 }
@@ -343,7 +351,7 @@ void clear_fifo (int *to, int *from, int *ofd)
 {
 	if (*to)
 		close (*ofd);
-	if (users[uid].fifo[*from - 1].fd) {
+	if (*from > 0 && users[uid].fifo[*from - 1].fd) {
 		unlink (users[uid].fifo[*from - 1].name);
 		memset (&users[uid].fifo[*from - 1], 0, sizeof (FIFO));
 	}
