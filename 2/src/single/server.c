@@ -109,6 +109,7 @@ void rm_user (int sock, User *users)
 	/* broadcast that you're out */
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[sock - 4].name);
 	broadcast (msg, sock, users);
+	write (sock, msg, strlen (msg));	/* since the connection has been set to 0 */
 	close (sock);
 
 	/* clear the user entry */
