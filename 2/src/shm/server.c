@@ -18,7 +18,7 @@
 
 #include "shm.h"
 
-void reaper (int sig);
+static void sig_handler (int sig);
 int passiveTCP (int port, int qlen);
 void create_shm (void);
 
@@ -29,8 +29,11 @@ int main (void)
 	pid_t			childpid;
 	struct sockaddr_in	cli_addr;
 
-	/* establish a signal handler to wait for child processes */
-	signal (SIGCHLD, reaper);
+	/* establish signal handlers */
+	signal (SIGCHLD, sig_handler);
+	signal (SIGINT, sig_handler);
+	signal (SIGQUIT, sig_handler);
+	signal (SIGTERM, sig_handler);
 
 	/* build a TCP connection */
 	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0) {
@@ -69,11 +72,23 @@ int main (void)
 	return 0;
 }
 
-void reaper (int sig)
+void sig_handler (int sig)
 {
-	if (sig == SIGCHLD)
+	if (sig == SIGCHLD) {
 		while (waitpid (-1, NULL, WNOHANG) > 0);
-	signal (sig, reaper);
+	} else if (sig == SIGINT || sig == SIGQUIT || sig == SIGTERM) {
+		int	shmid;
+		if ((shmid = shmget (SHMKEY, MAX_USERS * sizeof (User), PERM)) < 0) {
+			fputs ("server error: shmget failed\n", stderr);
+			exit (1);
+		}
+		if (shmctl (shmid, IPC_RMID, NULL) < 0) {
+			fputs ("server error: shmctl IPC_RMID failed\n", stderr);
+			exit (1);
+		}
+		exit (0);
+	}
+	signal (sig, sig_handler);
 }
 
 int passiveTCP (int port, int qlen)

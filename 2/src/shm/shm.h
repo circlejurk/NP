@@ -69,8 +69,6 @@ void name (char *new_name);
 void yell (int argc, char **argv);
 void tell (int argc, char **argv);
 
-void sig_handler (int sig);
-
 int resolv_ups (char *cmd, int *ofd, int *to, int *from);
 int open_up_out (int *ofd, int *to);
 int open_up_in (int *from);

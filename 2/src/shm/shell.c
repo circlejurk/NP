@@ -33,6 +33,8 @@ const char motd[] =	"****************************************\n"
 const char prompt[] = "% ";
 const char base_dir[] = "/u/cs/103/0310004";
 
+static void sig_handler (int sig);
+
 static int	shmid = 0, uid = 0;
 static User	*users = NULL;
 
@@ -780,6 +782,9 @@ void sig_handler (int sig)
 			if (users[uid].fifo[i].fd == 0 && users[uid].fifo[i].name[0] != 0)
 				users[uid].fifo[i].fd = open (users[uid].fifo[i].name, O_RDONLY | O_NONBLOCK);
 		}
+	} else if (sig == SIGINT || sig == SIGQUIT || sig == SIGTERM) {
+		rm_user ();
+		shmdt (users);
 	}
 	signal (sig, sig_handler);
 }
@@ -813,6 +818,9 @@ void initialize (void)
 	/* establish signal handlers */
 	signal (SIGUSR1, sig_handler);	/* receive messages from others */
 	signal (SIGUSR2, sig_handler);	/* open fifos to read from */
+	signal (SIGINT, sig_handler);
+	signal (SIGQUIT, sig_handler);
+	signal (SIGTERM, sig_handler);
 
 	/* print the welcome message */
 	write (STDOUT_FILENO, motd, strlen(motd));
