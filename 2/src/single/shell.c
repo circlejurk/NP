@@ -180,6 +180,8 @@ void set_np_out (char *line, int sock, User *users)
 
 	if (line[0] == 'y' && line[1] == 'e' && line[2] == 'l' && line[3] == 'l' && isspace (line[4]))
 		return;
+	if (line[0] == 't' && line[1] == 'e' && line[2] == 'l' && line[3] == 'l' && isspace (line[4]))
+		return;
 	/* find the numbered pipe in the current input line and add it in */
 	for (i = 0; line[i] != 0; ++i) {
 		if ((line[i] == '|' || line[i] == '!') && isnumber (line + i + 1)) {
@@ -370,6 +372,8 @@ int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *
 	userpipe[0] = userpipe[1] = *to = *from = 0;
 	/* check if it's yell command */
 	if (cmd[0] == 'y' && cmd[1] == 'e' && cmd[2] == 'l' && cmd[3] == 'l' && isspace (cmd[4]))
+		return 0;
+	if (cmd[0] == 't' && cmd[1] == 'e' && cmd[2] == 'l' && cmd[3] == 'l' && isspace (cmd[4]))
 		return 0;
 	/* resolve the input command and remove the user pipes' part */
 	for (i = 0; cmd[i] != 0; ++i) {
@@ -580,7 +584,7 @@ void printenv (int argc, char **argv)
 
 int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 {
-	int	argc = 0;
+	int	argc = 0, i;
 	char	*arg;
 
 	if (cmd[0] == 'y' && cmd[1] == 'e' && cmd[2] == 'l' && cmd[3] == 'l' && isspace (cmd[4])) {
@@ -591,6 +595,20 @@ int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file)
 		strcpy (argv[1], cmd + 5);
 		cmd[4] = ' ';
 		return 2;
+	} else if (cmd[0] == 't' && cmd[1] == 'e' && cmd[2] == 'l' && cmd[3] == 'l' && isspace (cmd[4])) {
+		for (i = 5; isdigit (cmd[i]); ++i);
+		if (isspace (cmd[i])) {
+			cmd[4] = 0;
+			argv[0] = (char *) malloc (5);
+			strcpy (argv[0], cmd);
+			cmd[i] = 0;
+			argv[1] = (char *) malloc (strlen (cmd + 5) + 1);
+			strcpy (argv[1], cmd + 5);
+			argv[2] = (char *) malloc (strlen (cmd + i + 1) + 1);
+			strcpy (argv[2], cmd + i + 1);
+			cmd[4] = cmd[i] = ' ';
+			return 3;
+		}
 	}
 	arg = strtok (cmd, " \r\n\t");
 	while (arg != NULL) {
@@ -631,6 +649,10 @@ int line_to_cmds (char *line, char **cmds)
 	char	*cmd;
 
 	if (line[0] == 'y' && line[1] == 'e' && line[2] == 'l' && line[3] == 'l' && isspace (line[4])) {
+		cmds[0] = (char *) malloc (strlen (line) + 1);
+		strcpy (cmds[0], line);
+		return 1;
+	} else if (line[0] == 't' && line[1] == 'e' && line[2] == 'l' && line[3] == 'l' && isspace (line[4])) {
 		cmds[0] = (char *) malloc (strlen (line) + 1);
 		strcpy (cmds[0], line);
 		return 1;
