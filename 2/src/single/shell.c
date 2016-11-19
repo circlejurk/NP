@@ -277,10 +277,56 @@ void set_up_in (int sock, User *users, int *from, int userpipe[2], char *ori_cmd
 	}
 }
 
+int open_up_out (int userpipe[2], int *to, int sock, User *users)
+{
+	int	pipefd[2];
+	char	msg[MAX_MSG_SIZE + 1];
+	if (users[*to - 1].connection == 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *to);
+		write (STDERR_FILENO, msg, strlen (msg));
+		*to = 0;
+		return -1;
+	} else if (users[*to - 1].up[sock - 4] != 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the pipe #%d->#%d already exists. ***\n", sock - 3, *to);
+		write (STDERR_FILENO, msg, strlen (msg));
+		*to = 0;
+		return -1;
+	} else if (pipe (pipefd) < 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "error: failed to create user pipes\n");
+		write (STDERR_FILENO, msg, strlen (msg));
+		*to = 0;
+		return -1;
+	} else {
+		users[*to - 1].up[sock - 4] = pipefd[0];
+		userpipe[1] = pipefd[1];
+	}
+	return 0;
+}
+
+int open_up_in (int userpipe[2], int *from, int sock, User *users)
+{
+	char	msg[MAX_MSG_SIZE + 1];
+	if (users[*from - 1].connection == 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *from);
+		write (STDERR_FILENO, msg, strlen (msg));
+		*from = 0;
+		return -1;
+	} else if (users[sock - 4].up[*from - 1] == 0) {
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the pipe #%d->#%d does not exist yet. ***\n", *from, sock - 3);
+		write (STDERR_FILENO, msg, strlen (msg));
+		*from = 0;
+		return -1;
+	} else {
+		userpipe[0] = users[sock - 4].up[*from - 1];
+		users[sock - 4].up[*from - 1] = 0;
+	}
+	return 0;
+}
+
 int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *users)
 {
-	int	i, j, pipefd[2];
-	char	msg[MAX_MSG_SIZE + 1], remain[MAX_CMD_SIZE + 1];
+	int	i, j;
+	char	remain[MAX_CMD_SIZE + 1];
 	/* initialize the values */
 	userpipe[0] = userpipe[1] = *to = *from = 0;
 	/* check if it's yell command */
@@ -293,45 +339,14 @@ int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *
 			if (cmd[j] == 0 || isspace (cmd[j])) {
 				strncpy (remain, cmd + j, MAX_CMD_SIZE + 1);
 				cmd[j] = 0;
-				if (cmd[i] == '>') {	/* pipe to another user */
-					if ((*to = atoi (cmd + i + 1)) > 0) {
-						if (users[*to - 1].connection == 0) {
-							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *to);
-							write (STDERR_FILENO, msg, strlen (msg));
-							*to = 0;
-							return -1;
-						} else if (users[*to - 1].up[sock - 4] != 0) {
-							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the pipe #%d->#%d already exists. ***\n", sock - 3, *to);
-							write (STDERR_FILENO, msg, strlen (msg));
-							*to = 0;
-							return -1;
-						} else if (pipe (pipefd) < 0) {
-							snprintf (msg, MAX_MSG_SIZE + 1, "error: failed to create user pipes\n");
-							write (STDERR_FILENO, msg, strlen (msg));
-							*to = 0;
-							return -1;
-						} else {
-							users[*to - 1].up[sock - 4] = pipefd[0];
-							userpipe[1] = pipefd[1];
-						}
-					}
-				} else {	/* receive pipe from another user */
-					if ((*from = atoi (cmd + i + 1)) > 0) {
-						if (users[*from - 1].connection == 0) {
-							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *from);
-							write (STDERR_FILENO, msg, strlen (msg));
-							*from = 0;
-							return -1;
-						} else if (users[sock - 4].up[*from - 1] == 0) {
-							snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the pipe #%d->#%d does not exist yet. ***\n", *from, sock - 3);
-							write (STDERR_FILENO, msg, strlen (msg));
-							*from = 0;
-							return -1;
-						} else {
-							userpipe[0] = users[sock - 4].up[*from - 1];
-							users[sock - 4].up[*from - 1] = 0;
-						}
-					}
+				/* pipe to another user */
+				if (cmd[i] == '>' && (*to = atoi (cmd + i + 1)) > 0) {	/* check if it's a valid id */
+					if (open_up_out (userpipe, to, sock, users) < 0)
+						return -1;
+				/* receive pipe from another user */
+				} else if ((*from = atoi (cmd + i + 1)) > 0) {	/* check if it's a valid id */
+					if (open_up_in (userpipe, from, sock, users) < 0)
+						return -1;
 				}
 				cmd[i] = ' ';
 				cmd[i + 1] = 0;

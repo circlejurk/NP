@@ -110,12 +110,9 @@ void rm_user (int sock, User *users)
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[sock - 4].name);
 	broadcast (msg, sock, users);
 	/* clear the user entry */
-	users[sock - 4].name[0] = 0;
-	users[sock - 4].ip[0] = 0;
-	users[sock - 4].port = 0;
-	users[sock - 4].connection = 0;
 	clear_nps (sock, users);	/* free the allocated spaces of numbered pipes */
 	clear_ups (sock, users);	/* free the allocated spaces of user pipes */
+	memset (&users[sock - 4], 0, sizeof (User));
 }
 
 void add_user (int sock, struct sockaddr_in *cli_addr, User *users)

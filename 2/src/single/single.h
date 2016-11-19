@@ -55,6 +55,8 @@ void tell (int sock, User *users, int argc, char **argv);
 void yell (int sock, User *users, int argc, char **argv);
 
 int resolv_ups (char *cmd, int userpipe[2], int *to, int *from, int sock, User *users);
+int open_up_out (int userpipe[2], int *to, int sock, User *users);
+int open_up_in (int userpipe[2], int *from, int sock, User *users);
 void set_up_out (int sock, User *users, int *to, int userpipe[2], char *ori_cmd);
 void set_up_in (int sock, User *users, int *from, int userpipe[2], char *ori_cmd);
 void clear_ups (int sock, User *users);
