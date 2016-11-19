@@ -321,7 +321,7 @@ int open_up_out (int userpipe[2], int *to, int sock, User *users)
 	int	pipefd[2];
 	char	msg[MAX_MSG_SIZE + 1];
 	if (users[*to - 1].connection == 0) {
-		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *to);
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: user #%d does not exist yet. ***\n", *to);
 		write (STDERR_FILENO, msg, strlen (msg));
 		*to = 0;
 		return -1;
@@ -346,7 +346,7 @@ int open_up_in (int userpipe[2], int *from, int sock, User *users)
 {
 	char	msg[MAX_MSG_SIZE + 1];
 	if (users[*from - 1].connection == 0) {
-		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *from);
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: user #%d does not exist yet. ***\n", *from);
 		write (STDERR_FILENO, msg, strlen (msg));
 		*from = 0;
 		return -1;

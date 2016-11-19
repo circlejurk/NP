@@ -379,7 +379,7 @@ int open_up_out (int *ofd, int *to)
 	char	msg[MAX_MSG_SIZE + 1], fifo[FIFO_NAME_SIZE + 1];
 	/* check if the client is on line */
 	if (users[*to - 1].id == 0) {
-		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *to);
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: user #%d does not exist yet. ***\n", *to);
 		write (STDERR_FILENO, msg, strlen (msg));
 		*to = 0;
 		return -1;
@@ -414,7 +414,7 @@ int open_up_in (int *from)
 	char	msg[MAX_MSG_SIZE + 1];
 	/* check the client is on line */
 	if (users[*from - 1].id == 0) {
-		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the user #%d does not exist. ***\n", *from);
+		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: user #%d does not exist yet. ***\n", *from);
 		write (STDERR_FILENO, msg, strlen (msg));
 		*from = 0;
 		return -1;
