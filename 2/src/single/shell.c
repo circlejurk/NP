@@ -22,12 +22,16 @@ const char motd[] =	"****************************************\n"
 			"** Welcome to the information server. **\n"
 			"****************************************\n\n";
 const char prompt[] = "% ";
+const char base_dir[] = "/u/cs/103/0310004";
 
 
 int shell (int sock, User *users)
 {
 	int	progc, stdfd[3], readc;
 	char	line[MAX_LINE_SIZE + 1], *cmds[(MAX_LINE_SIZE - 1) / 2];
+
+	/* restore the environment variables of the user */
+	restore_env (sock, users);
 
 	if (users[sock - 4].connection > 0) {
 		/* read one line from client input */
@@ -53,6 +57,9 @@ int shell (int sock, User *users)
 			np_countdown (users[sock - 4].np);
 		}
 	}
+
+	/* save the environment variables of the user */
+	save_env (sock, users);
 
 	return users[sock - 4].connection;
 }
@@ -85,6 +92,38 @@ int readline (char *line, int *connection)
 		}
 	}
 	return strlen (line);
+}
+
+void save_env (int sock, User *users)
+{
+	int	i, num;
+	clear_env (sock, users);
+	/* find the number of the environment variables */
+	for (num = 0; environ[num] != NULL; ++num);
+	/* allocate spaces */
+	users[sock - 4].env = malloc ((num + 1) * sizeof (char *));
+	/* save to the data structure */
+	for (i = 0; i < num; ++i) {
+		users[sock - 4].env[i] = malloc (strlen (environ[i]) + 1);
+		strcpy (users[sock - 4].env[i], environ[i]);
+	}
+	users[sock - 4].env[num] = NULL;
+}
+
+void restore_env (int sock, User *users)
+{
+	int	i, e;
+	char	*s;
+	clearenv ();
+	for (i = 0; users[sock - 4].env[i] != NULL; ++i) {
+		s = users[sock - 4].env[i];
+		for (e = 0; s[e] != '=' && s[e] != 0; ++e);
+		if (s[e] == '=') {
+			s[e] = 0;
+			setenv (s, s + e + 1, 1);
+			s[e] = '=';
+		}
+	}
 }
 
 void clear_nps (int sock, User *users)

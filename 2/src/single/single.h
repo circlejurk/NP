@@ -7,7 +7,7 @@
 #define MAX_MSG_SIZE	1024	/* one message has at most 1024 bytes */
 #define NAME_SIZE	20
 
-extern const char motd[], prompt[];
+extern const char motd[], prompt[], base_dir[];
 
 typedef struct numbered_pipe {
 	int	*fd;
@@ -20,6 +20,7 @@ typedef struct user {
 	int	connection;		/* client's connection status, 1: on, 0: off, -1: err */
 	Npipe	*np;			/* client's numbered pipe, created when first use */
 	int	*up;			/* client's user pipe, created when the user logged in */
+	char	**env;			/* client's environ backup */
 } User;
 
 /* implemented in shell.c */
@@ -60,6 +61,10 @@ int open_up_in (int userpipe[2], int *from, int sock, User *users);
 void set_up_out (int sock, User *users, int *to, int userpipe[2], char *ori_cmd);
 void set_up_in (int sock, User *users, int *from, int userpipe[2], char *ori_cmd);
 void clear_ups (int sock, User *users);
+void save_env (int sock, User *users);
+void restore_env (int sock, User *users);
 
 /* implemented in server.c */
 void broadcast (char *msg, int sock, User *users);
+void init_env (int sock, User *users);
+void clear_env (int sock, User *users);

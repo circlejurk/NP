@@ -105,13 +105,16 @@ void execute (int sock, User *users)
 void rm_user (int sock, User *users)
 {
 	char	msg[MAX_MSG_SIZE + 1];
+
 	close (sock);
 	/* broadcast that you're out */
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[sock - 4].name);
 	broadcast (msg, sock, users);
+
 	/* clear the user entry */
 	clear_nps (sock, users);	/* free the allocated spaces of numbered pipes */
 	clear_ups (sock, users);	/* free the allocated spaces of user pipes */
+	clear_env (sock, users);	/* clear the environment variables of the user */
 	memset (&users[sock - 4], 0, sizeof (User));
 }
 
@@ -126,6 +129,7 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 	users[sock - 4].connection = 1;					/* set connection */
 	users[sock - 4].np = NULL;					/* set numbered pipes */
 	users[sock - 4].up = calloc (MAX_USERS, sizeof (int));		/* allocate user pipes */
+	init_env (sock, users);						/* initialize the environment variables of the user */
 	write (sock, motd, strlen(motd));	/* print the welcome message */
 
 	/* broadcast that you're in */
@@ -136,11 +140,12 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 
 void initialize (void)
 {
+	char	*wd = malloc (strlen (base_dir) + 5);
 	/* initialize the original directory */
-	chdir ("/u/cs/103/0310004/rwg");
-	/* initialize the environment variables */
-	clearenv ();
-	putenv ("PATH=bin:.");
+	strcpy (wd, base_dir);
+	strcat (wd, "/rwg");
+	chdir (wd);
+	free (wd);
 }
 
 int passiveTCP (int port, int qlen)
@@ -185,5 +190,25 @@ void broadcast (char *msg, int sock, User *users)
 			if (idx + 4 != sock)	/* show the prompt for others */
 				write (idx + 4, prompt, strlen(prompt));
 		}
+	}
+}
+
+void init_env (int sock, User *users)
+{
+	/* initialize the environment variables */
+	users[sock - 4].env = malloc (2 * sizeof (char *));
+	users[sock - 4].env[0] = malloc (sizeof ("PATH=bin:."));
+	users[sock - 4].env[1] = NULL;
+	strcpy (users[sock - 4].env[0], "PATH=bin:.");
+}
+
+void clear_env (int sock, User *users)
+{
+	if (users[sock - 4].env) {
+		int	i;
+		for (i = 0; users[sock - 4].env[i] != NULL; ++i)
+			free (users[sock - 4].env[i]);
+		free (users[sock - 4].env);
+		users[sock - 4].env = NULL;
 	}
 }
