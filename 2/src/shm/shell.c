@@ -425,14 +425,8 @@ int open_up_out (int *ofd, int *to)
 int open_up_in (int *from)
 {
 	char	msg[MAX_MSG_SIZE + 1];
-	/* check the client is on line */
-	if (users[*from - 1].id == 0) {
-		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: user #%d does not exist yet. ***\n", *from);
-		write (STDERR_FILENO, msg, strlen (msg));
-		*from = 0;
-		return -1;
 	/* check the existence of the fifo */
-	} else if (users[uid].fifo[*from - 1].fd == 0) {
+	if (users[uid].fifo[*from - 1].fd == 0) {
 		snprintf (msg, MAX_MSG_SIZE + 1, "*** Error: the pipe #%d->#%d does not exist yet. ***\n", *from, users[uid].id);
 		write (STDERR_FILENO, msg, strlen (msg));
 		*from = 0;
