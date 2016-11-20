@@ -96,7 +96,7 @@ void broadcast (char *msg)
 {
 	int	i, j;
 	write (STDOUT_FILENO, msg, strlen (msg));
-	strncat (msg, "% ", 3);
+	strncat (msg, prompt, strlen (prompt) + 1);
 	for (i = 0; i < MAX_USERS; ++i) {
 		if (users[i].id > 0 && i != uid) {
 			for (j = 0; j < MAX_MSG_NUM; ++j) {

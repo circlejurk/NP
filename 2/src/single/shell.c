@@ -437,10 +437,12 @@ void tell (int sock, User *users, int argc, char **argv)
 		sprintf (msg, "*** %s told you ***: ", users[sock - 4].name);
 		for (i = 2; i < argc; ++i) {
 			strcat (msg, argv[i]);
-			if (i == argc - 1)
-				strcat (msg, "\n% ");
-			else
+			if (i == argc - 1) {
+				strcat (msg, "\n");
+				strcat (msg, prompt);
+			} else {
 				strcat (msg, " ");
+			}
 		}
 		write (to_sock, msg, strlen (msg));
 	} else {
