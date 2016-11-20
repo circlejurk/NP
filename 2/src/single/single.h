@@ -65,6 +65,6 @@ void save_env (int sock, User *users);
 void restore_env (int sock, User *users);
 
 /* implemented in server.c */
-void broadcast (char *msg, int sock, User *users);
+void broadcast (char *msg, User *users);
 void init_env (int sock, User *users);
 void clear_env (int sock, User *users);
