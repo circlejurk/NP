@@ -228,8 +228,13 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 		strncpy (ori_cmd, cmds[idx], MAX_CMD_SIZE + 1);
 
 		/* resolve user pipes from commmand */
-		if (resolv_ups (cmds[idx], userpipe, &to, &from, sock, users) < 0)
+		if (resolv_ups (cmds[idx], userpipe, &to, &from, sock, users) < 0) {
+			if (pipefd[0])
+				close (pipefd[0]);
+			if (pipefd[1])
+				close (pipefd[1]);
 			break;
+		}
 
 		/* parse the input command into argv */
 		argc = cmd_to_argv (cmds[idx], argv, &in_file, &out_file);
@@ -276,12 +281,18 @@ void execute_one_line (int progc, char **cmds, int sock, User *users)
 				fprintf (stderr, "Unknown command: [%s].\n", argv[0]);
 				users[sock - 4].connection = -1;
 				idx = progc;
+			} else {
+				wait (&stat);
+				if (stat != 0) {
+					idx = progc;
+					if (pipefd[0])
+						close (pipefd[0]);
+					if (pipefd[1])
+						close (pipefd[1]);
+				}
+				if (to)
+					close (userpipe[1]);
 			}
-			wait (&stat);
-			if (stat != 0)
-				idx = progc;
-			if (to)
-				close (userpipe[1]);
 		}
 
 		/* free the allocated space of one command */
@@ -506,6 +517,7 @@ void set_pipes_out (int *pipefd, int *stdfd, int index, int progc)
 		dup2 (pipefd[1], STDOUT_FILENO);
 		close (pipefd[0]);
 		close (pipefd[1]);
+		pipefd[0] = pipefd[1] = 0;
 	}
 }
 
@@ -515,6 +527,7 @@ void set_pipes_in (int *pipefd, int index)
 		dup2 (pipefd[0], STDIN_FILENO);
 		close (pipefd[0]);
 		close (pipefd[1]);
+		pipefd[0] = pipefd[1] = 0;
 	}
 }
 
