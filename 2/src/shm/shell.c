@@ -95,10 +95,8 @@ int shell (struct sockaddr_in *addr)
 void broadcast (char *msg)
 {
 	int	i, j;
-	write (STDOUT_FILENO, msg, strlen (msg));
-	strncat (msg, prompt, strlen (prompt) + 1);
 	for (i = 0; i < MAX_USERS; ++i) {
-		if (users[i].id > 0 && i != uid) {
+		if (users[i].id > 0) {
 			for (j = 0; j < MAX_MSG_NUM; ++j) {
 				if (users[i].msg[uid][j][0] == 0) {
 					strncpy (users[i].msg[uid][j], msg, MAX_MSG_SIZE + 1);
