@@ -226,10 +226,16 @@ void execute_one_line (int progc, char **cmds, int *connection)
 				fprintf (stderr, "Unknown command: [%s].\n", *argv);
 				*connection = -1;
 				i = progc;
+			} else {
+				wait (&stat);
+				if (stat != 0) {
+					i = progc;
+					if (pipefd[0])
+						close (pipefd[0]);
+					if (pipefd[1])
+						close (pipefd[1]);
+				}
 			}
-			wait (&stat);
-			if (stat != 0)
-				i = progc;
 		}
 
 		/* free the allocated space of one command */
@@ -257,6 +263,7 @@ void set_pipes_out (int *pipefd, int *stdfd, int index, int progc)
 		dup2 (pipefd[1], STDOUT_FILENO);
 		close (pipefd[0]);
 		close (pipefd[1]);
+		pipefd[0] = pipefd[1] = 0;
 	}
 }
 
@@ -266,6 +273,7 @@ void set_pipes_in (int *pipefd, int index)
 		dup2 (pipefd[0], STDIN_FILENO);
 		close (pipefd[0]);
 		close (pipefd[1]);
+		pipefd[0] = pipefd[1] = 0;
 	}
 }
 
