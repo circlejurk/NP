@@ -70,6 +70,7 @@ int main (void)
 			} else {
 				FD_SET (ssock, &afds);		/* add an active socket */
 				add_user (ssock, &cli_addr, users);	/* add a user */
+				write (ssock, prompt, strlen(prompt));	/* show the prompt */
 			}
 		}
 		/* execute the command input by clients */
@@ -108,7 +109,7 @@ void rm_user (int sock, User *users)
 
 	/* broadcast that you're out */
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' left. ***\n", users[sock - 4].name);
-	broadcast (msg, sock, users);
+	broadcast (msg, users);
 	write (sock, msg, strlen (msg));	/* since the connection has been set to 0 */
 	close (sock);
 
@@ -135,8 +136,7 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users)
 
 	/* broadcast that you're in */
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User '%s' entered from %s/%d. ***\n", users[sock - 4].name, users[sock - 4].ip, users[sock - 4].port);
-	broadcast (msg, sock, users);
-	write (sock, prompt, strlen(prompt));	/* show the prompt */
+	broadcast (msg, users);
 }
 
 void initialize (void)
@@ -181,15 +181,13 @@ int passiveTCP (int port, int qlen)
 	return sockfd;
 }
 
-void broadcast (char *msg, int sock, User *users)
+void broadcast (char *msg, User *users)
 {
 	int	idx;
 	for (idx = 0; idx < MAX_USERS; ++idx) {
 		/* broadcast to on-line clients */
 		if (users[idx].connection > 0) {
 			write (idx + 4, msg, strlen(msg));	/* print the message out */
-			if (idx + 4 != sock)	/* show the prompt for others */
-				write (idx + 4, prompt, strlen(prompt));
 		}
 	}
 }

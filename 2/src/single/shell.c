@@ -311,7 +311,7 @@ void set_up_out (int sock, User *users, int *to, int userpipe[2], char *ori_cmd)
 		dup2 (userpipe[1], STDOUT_FILENO);
 		close (userpipe[1]);
 		snprintf (msg, MAX_MSG_SIZE + 1, "*** %s (#%d) just piped '%s' to %s (#%d) ***\n", users[sock - 4].name, sock - 3, ori_cmd, users[*to - 1].name, *to);
-		broadcast (msg, sock, users);
+		broadcast (msg, users);
 		*to = 0;
 	}
 }
@@ -324,7 +324,7 @@ void set_up_in (int sock, User *users, int *from, int userpipe[2], char *ori_cmd
 		dup2 (userpipe[0], STDIN_FILENO);
 		close (userpipe[0]);
 		snprintf (msg, MAX_MSG_SIZE + 1, "*** %s (#%d) just received from %s (#%d) by '%s' ***\n", users[sock - 4].name, sock - 3, users[*from - 1].name, *from, ori_cmd);
-		broadcast (msg, sock, users);
+		broadcast (msg, users);
 		*from = 0;
 	}
 }
@@ -436,7 +436,7 @@ void yell (int sock, User *users, int argc, char **argv)
 		else
 			strcat (msg, " ");
 	}
-	broadcast (msg, sock, users);
+	broadcast (msg, users);
 	free (msg);
 }
 
@@ -448,12 +448,10 @@ void tell (int sock, User *users, int argc, char **argv)
 		sprintf (msg, "*** %s told you ***: ", users[sock - 4].name);
 		for (i = 2; i < argc; ++i) {
 			strcat (msg, argv[i]);
-			if (i == argc - 1) {
+			if (i == argc - 1)
 				strcat (msg, "\n");
-				strcat (msg, prompt);
-			} else {
+			else
 				strcat (msg, " ");
-			}
 		}
 		write (to_sock, msg, strlen (msg));
 	} else {
@@ -476,7 +474,7 @@ void name (int sock, User *users, char *new_name)
 	}
 	strncpy (users[sock - 4].name, new_name, NAME_SIZE + 1);
 	snprintf (msg, MAX_MSG_SIZE + 1, "*** User from %s/%d is named '%s'. ***\n", users[sock - 4].ip, users[sock - 4].port, users[sock - 4].name);
-	broadcast (msg, sock, users);
+	broadcast (msg, users);
 }
 
 void who (int sock, User *users)
