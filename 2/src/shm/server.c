@@ -22,9 +22,11 @@ static void sig_handler (int sig);
 int passiveTCP (int port, int qlen);
 void create_shm (void);
 
-int main (void)
+const char usage[] = "Usage: ./server <port>\n";
+
+int main (int argc, char **argv)
 {
-	int			msock, ssock;
+	int			msock, ssock, port;
 	socklen_t		clilen = sizeof (struct sockaddr_in);
 	pid_t			childpid;
 	struct sockaddr_in	cli_addr;
@@ -35,8 +37,16 @@ int main (void)
 	signal (SIGQUIT, sig_handler);
 	signal (SIGTERM, sig_handler);
 
+	/* setting up the port number */
+	if (argc != 2 || ! isnumber (argv[1])) {
+		fputs (usage, stderr);
+		return -1;
+	} else {
+		port = atoi (argv[1]);
+	}
+
 	/* build a TCP connection */
-	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0) {
+	if ((msock = passiveTCP (port, 0)) < 0) {
 		fputs ("server error: passiveTCP failed\n", stderr);
 		return -1;
 	}

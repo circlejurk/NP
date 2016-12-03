@@ -1,4 +1,3 @@
-#define SERV_TCP_PORT	9527
 #define MAX_LINE_SIZE	15000
 #define MAX_CMD_SIZE	256
 #define MAX_PIPE	1000

@@ -29,9 +29,11 @@ void add_user (int sock, struct sockaddr_in *cli_addr, User *users);
 void rm_user (int sock, User *users);
 void execute (int sock, User *users);
 
-int main (void)
+const char usage[] = "Usage: ./server <port>\n";
+
+int main (int argc, char **argv)
 {
-	int			msock, ssock, fd, nfds = getdtablesize ();
+	int			msock, ssock, port, fd, nfds = getdtablesize ();
 	fd_set			rfds, afds;
 	socklen_t		clilen = sizeof (struct sockaddr_in);
 	struct sockaddr_in	cli_addr = {0};
@@ -39,8 +41,16 @@ int main (void)
 
 	initialize ();	/* server initialization */
 
+	/* setting up the port number */
+	if (argc != 2 || ! isnumber (argv[1])) {
+		fputs (usage, stderr);
+		return -1;
+	} else {
+		port = atoi (argv[1]);
+	}
+
 	/* build a TCP connection */
-	if ((msock = passiveTCP (SERV_TCP_PORT, 0)) < 0) {
+	if ((msock = passiveTCP (port, 0)) < 0) {
 		fputs ("server error: passiveTCP failed\n", stderr);
 		return -1;
 	}
