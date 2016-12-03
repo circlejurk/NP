@@ -387,7 +387,7 @@ int line_to_cmds (char *line, char **cmds)
 	char	*cmd;
 
 	cmd = strtok (line, "|\r\n");
-	while (cmd != NULL ) {
+	while (cmd != NULL) {
 		cmds[progc] = (char *) malloc (strlen (cmd) + 1);
 		strcpy (cmds[progc], cmd);
 		++progc;
