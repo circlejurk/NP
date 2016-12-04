@@ -18,6 +18,8 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
+#define RECV_BUF_SIZE 3000
+
 typedef struct host {
 	struct sockaddr_in	sin;	/* the server socket address */
 	int			sock;	/* the connection socket */
@@ -32,8 +34,9 @@ int setup_host (Host *host, char *hostname, char *port, char *filename, fd_set *
 void preoutput (Host *hosts);
 int try_connect (Host *hosts, fd_set *afds);
 void output (char *msg, int idx);
-int receive (Host *hosts, int idx);
+int receive (Host *hosts, int idx, fd_set *afds);
 int send_cmd (Host *hosts, int idx);
+int contain_prompt (char *s);
 
 const char	prompt[] = "% ";
 
@@ -73,7 +76,7 @@ int main (void)
 				continue;
 			/* receive messages from servers */
 			if (FD_ISSET (hosts[i].sock, &rfds)) {
-				receive (hosts, i);
+				receive (hosts, i, &afds);
 			}
 			/* send a command to servers */
 			if (FD_ISSET (fileno (hosts[i].fin), &rfds) && hosts[i].stat == 2) {
@@ -89,8 +92,50 @@ int send_cmd (Host *hosts, int idx)
 {
 }
 
-int receive (Host *hosts, int idx)
+int receive (Host *hosts, int idx, fd_set *afds)
 {
+	int	len;
+	char	buf[RECV_BUF_SIZE + 1], *token, *html_msg;
+
+	if ((len = read (hosts[idx].sock, buf, RECV_BUF_SIZE)) < 0) {
+		fprintf (stderr, "error: failed to read from hosts[%d]\n", idx);
+		return -1;
+	} else if (len == 0) {
+		/* close the connection to the host */
+		FD_CLR (fileno (hosts[idx].fin), afds);
+		FD_CLR (hosts[idx].sock, afds);
+		fclose (hosts[idx].fin);
+		close (hosts[idx].sock);
+		memset (&hosts[idx], 0, sizeof (Host));
+	} else {
+		buf[len] = 0;	/* let the string be null-terminated */
+		/* print the received messages back to the user */
+		for (token = strtok (buf, "\r\n"); token != NULL; token = strtok (NULL, "\r\n")) {
+			if (contain_prompt (token))
+				hosts[idx].stat = 2;	/* set the status to connected and writable */
+			html_msg = malloc (strlen (token) + 5);
+			strcpy (html_msg, token);
+			strncat (html_msg, "<br>", 5);
+			output (html_msg, idx);
+			free (html_msg);
+		}
+	}
+
+	return len;
+}
+
+int contain_prompt (char *s)
+{
+	int	i = 0;
+	while (*s != 0) {
+		if (*s == prompt[i]) {
+			if (++i == strlen (prompt))
+				return 1;
+		} else
+			i = 0;
+		++s;
+	}
+	return 0;
 }
 
 void output (char *msg, int idx)
