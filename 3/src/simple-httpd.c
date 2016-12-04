@@ -78,7 +78,7 @@ void readfile (char *file)
 	FILE	*fin = fopen (file, "r");
 	char	buf[MAX_BUF_SIZE + 1];
 
-	reply ("Content-Type: text/plain\n\n");
+	reply ("Content-Type: text/html\n\n");
 
 	while (fgets (buf, MAX_BUF_SIZE + 1, fin))
 		reply (buf);
