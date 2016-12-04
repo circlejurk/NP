@@ -143,6 +143,7 @@ void output (char *msg, int idx)
 	fprintf (stdout, "<script>document.all['m%d'].innerHTML += \"", idx);
 	fputs (msg, stdout);
 	fputs ("\";</script>\n", stdout);
+	fflush (stdout);
 }
 
 int try_connect (Host *hosts, fd_set *afds)
@@ -189,6 +190,7 @@ void preoutput (Host *hosts)
 		fprintf (stdout, "<td valign=\"top\" id=\"m%d\"></td>\n", i);
 	fputs ("</tr>\n", stdout);
 	fputs ("</table>\n", stdout);
+	fflush (stdout);
 }
 
 int resolv_requests (Host *hosts, fd_set *afds)
