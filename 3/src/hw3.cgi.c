@@ -64,9 +64,9 @@ int main (void)
 
 		/* copy the active fds into read fds */
 		memcpy (&rfds, &afds, sizeof(rfds));
-		/* select timeout for 1 ms */
+		/* select timeout for 10 ms */
 		timeout.tv_sec = 0;
-		timeout.tv_usec = 1000;
+		timeout.tv_usec = 10000;
 		/* select from the rfds */
 		if (select (nfds, &rfds, NULL, NULL, &timeout) < 0) {
 			fputs ("error: select failed\n", stderr);
@@ -85,6 +85,8 @@ int main (void)
 				send_cmd (hosts, i);
 			}
 		}
+
+		usleep (10000);
 	}
 
 	return 0;
