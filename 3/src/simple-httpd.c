@@ -181,7 +181,7 @@ void clear_req (Header *req)
 
 void read_req (Header *req)
 {
-	char	buf[MAX_BUF_SIZE + 1], *token, *key, *val;
+	char	buf[MAX_BUF_SIZE + 1], *token, *q, *key, *val;
 
 	fgets (buf, MAX_BUF_SIZE + 1, stdin);
 	/* method */
@@ -189,21 +189,25 @@ void read_req (Header *req)
 	req->method = malloc (strlen (token) + 1);
 	strncpy (req->method, token, 5);
 	/* path */
-	token = strtok (NULL, " \r\n?");
+	token = strtok (NULL, " \r\n");
+	for (q = token; *q != '?' && *q != 0; ++q);
+	if (*q == '?') {
+		*q = 0;
+		++q;
+	}
 	req->path = malloc (strlen (token) + 1);
 	strncpy (req->path, token, strlen (token) + 1);
-	/* fullpath */	/* TODO: user_dir, change DocRoot before first usage */
-	req->fullpath = malloc (strlen (DocRoot) + strlen (req->path) + 1);
-	strncpy (req->fullpath, DocRoot, strlen (DocRoot) + 1);
-	strncat (req->fullpath, req->path, strlen (req->path) + 1);
 	/* query string */
-	token = strtok (NULL, " \r\n");
-	req->qstring = malloc (strlen (token) + 1);
-	strncpy (req->qstring, token, strlen (token) + 1);
+	req->qstring = malloc (strlen (q) + 1);
+	strncpy (req->qstring, q, strlen (q) + 1);
 	/* HTTP protocol */
 	token = strtok (NULL, " \r\n");
 	req->proto = malloc (strlen (token) + 1);
 	strncpy (req->proto, token, strlen (token) + 1);
+	/* fullpath */	/* TODO: user_dir, change DocRoot before first usage */
+	req->fullpath = malloc (strlen (DocRoot) + strlen (req->path) + 1);
+	strncpy (req->fullpath, DocRoot, strlen (DocRoot) + 1);
+	strncat (req->fullpath, req->path, strlen (req->path) + 1);
 
 	/* read through each line of the request header */
 	while (fgets (buf, MAX_BUF_SIZE + 1, stdin)) {
