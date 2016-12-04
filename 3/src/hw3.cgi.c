@@ -31,35 +31,36 @@ typedef struct host {
 					/* 2: connected and writable */
 } Host;
 
-int resolv_requests (Host *hosts, fd_set *afds);
-int setup_host (Host *host, char *hostname, char *port, char *filename, fd_set *afds);
+int resolv_requests (Host *hosts);
+int add_host (Host *host, char *hostname, char *port, char *filename);
+void rm_host (Host *host);
 void preoutput (Host *hosts);
-int try_connect (Host *hosts, fd_set *afds);
+int try_connect (Host *hosts);
 void output (char *msg, int idx);
-int receive (Host *hosts, int idx, fd_set *afds);
-int send_cmd (Host *hosts, int idx);
+int receive (Host *hosts, int idx);
 int contain_prompt (char *s);
+int send_cmd (Host *hosts, int idx);
 
 const char	prompt[] = "% ";
+fd_set		rfds, afds;
 
 int main (void)
 {
 	int		i, nfds = getdtablesize ();
-	fd_set		rfds, afds;
 	Host		hosts[5] = {0};
 	struct timeval	timeout;
 
 	FD_ZERO (&afds);
 
 	/* resolve the requests and set up the hosts */
-	if (resolv_requests (hosts, &afds) < 0)
+	if (resolv_requests (hosts) < 0)
 		return -1;
 
 	preoutput (hosts);
 
-	while (1) {
+	while (hosts[0].sock + hosts[1].sock + hosts[2].sock + hosts[3].sock + hosts[4].sock) {
 		/* try to connect to servers */
-		if (try_connect (hosts, &afds) < 0)
+		if (try_connect (hosts) < 0)
 			return -1;
 
 		/* copy the active fds into read fds */
@@ -78,15 +79,17 @@ int main (void)
 				continue;
 			/* receive messages from servers */
 			if (FD_ISSET (hosts[i].sock, &rfds)) {
-				receive (hosts, i, &afds);
+				if (receive (hosts, i) < 0)
+					return -1;
 			}
 			/* send a command to servers */
-			if (FD_ISSET (fileno (hosts[i].fin), &rfds) && hosts[i].stat == 2) {
-				send_cmd (hosts, i);
+			if (hosts[i].stat == 2 && FD_ISSET (fileno (hosts[i].fin), &rfds)) {
+				if (send_cmd (hosts, i) < 0)
+					return -1;
 			}
 		}
 
-		usleep (1000);	/* sleep fo 1 ms */
+		usleep (1000);	/* sleep for 1 ms */
 	}
 
 	return 0;
@@ -94,38 +97,78 @@ int main (void)
 
 int send_cmd (Host *hosts, int idx)
 {
+	char	cmd[MAX_BUF_SIZE + 1], *p, *html_msg;
+
+	p = fgets (cmd, MAX_BUF_SIZE + 1, hosts[idx].fin);
+	if (ferror (hosts[idx].fin)) {			/* error */
+		fputs ("error: fgets failed when reading commands\n", stderr);
+		return -1;
+	} else if (feof (hosts[idx].fin) && p == NULL) {	/* EOF */
+		write (hosts[idx].sock, "exit\n", 5);
+	} else {
+		write (hosts[idx].sock, cmd, strlen (cmd));
+		strtok (cmd, "\r\n");
+		html_msg = malloc (strlen (cmd) + 12);
+		strcpy (html_msg, "<b>");
+		strcat (html_msg, cmd);
+		strcat (html_msg, "</b><br>");
+		output (html_msg, idx);
+		free (html_msg);
+	}
+	hosts[idx].stat = 1;
+
+	return 0;
 }
 
-int receive (Host *hosts, int idx, fd_set *afds)
+int receive (Host *hosts, int idx)
 {
 	int	len;
-	char	buf[MAX_BUF_SIZE + 1], *token, *html_msg;
+	char	buf[MAX_BUF_SIZE + 1], *token, *c, *html_msg;
 
 	if ((len = read (hosts[idx].sock, buf, MAX_BUF_SIZE)) < 0) {
 		fprintf (stderr, "error: failed to read from hosts[%d]\n", idx);
 		return -1;
 	} else if (len == 0) {
 		/* close the connection to the host */
-		FD_CLR (fileno (hosts[idx].fin), afds);
-		FD_CLR (hosts[idx].sock, afds);
-		fclose (hosts[idx].fin);
-		close (hosts[idx].sock);
-		memset (&hosts[idx], 0, sizeof (Host));
+		rm_host (&hosts[idx]);
 	} else {
 		buf[len] = 0;	/* let the string be null-terminated */
 		/* print the received messages back to the user */
-		for (token = strtok (buf, "\r\n"); token != NULL; token = strtok (NULL, "\r\n")) {
+		token = buf;
+		while (token[0] != 0) {
+			for (c = token; *c != '\n' && *c != 0; ++c);
+			if (*c == '\n') {
+				*c = 0;
+				++c;
+			}
+
 			if (contain_prompt (token))
-				hosts[idx].stat = 2;	/* set the status to connected and writable */
+				hosts[idx].stat = 2;
 			html_msg = malloc (strlen (token) + 5);
 			strcpy (html_msg, token);
-			strncat (html_msg, "<br>", 5);
+			if (strcmp (token, prompt) != 0)
+				strncat (html_msg, "<br>", 5);
 			output (html_msg, idx);
 			free (html_msg);
+
+			token = c;
 		}
 	}
 
 	return len;
+}
+
+void rm_host (Host *host)
+{
+	if (host->sock != 0) {
+		if (host->stat) {
+			FD_CLR (host->sock, &afds);
+			close (host->sock);
+		}
+		FD_CLR (fileno (host->fin), &afds);
+		fclose (host->fin);
+		memset (host, 0, sizeof (Host));
+	}
 }
 
 int contain_prompt (char *s)
@@ -151,7 +194,7 @@ void output (char *msg, int idx)
 	write (STDOUT_FILENO, buf, strlen (buf));
 }
 
-int try_connect (Host *hosts, fd_set *afds)
+int try_connect (Host *hosts)
 {
 	int	i;
 	for (i = 0; i < 5; ++i) {
@@ -163,7 +206,7 @@ int try_connect (Host *hosts, fd_set *afds)
 					return -1;
 				}
 			} else {
-				FD_SET (hosts[i].sock, afds);
+				FD_SET (hosts[i].sock, &afds);
 				hosts[i].stat = 1;
 			}
 		}
@@ -202,7 +245,7 @@ void preoutput (Host *hosts)
 	write (STDOUT_FILENO, buf, sizeof (buf));
 }
 
-int resolv_requests (Host *hosts, fd_set *afds)
+int resolv_requests (Host *hosts)
 {
 	int	i;
 	char	*qstring;		/* QUERY_STRING */
@@ -245,9 +288,9 @@ int resolv_requests (Host *hosts, fd_set *afds)
 		if (*hostname == 0 || *port == 0 || *filename == 0)
 			continue;
 
-		if (setup_host (&hosts[i - 1], hostname, port, filename, afds) < 0) {
+		if (add_host (&hosts[i - 1], hostname, port, filename) < 0) {
 			free (qstring);
-			fprintf (stderr, "error: setup_host failed at hosts[%d]\n", i - 1);
+			fprintf (stderr, "error: add_host failed at hosts[%d]\n", i - 1);
 			return -1;
 		}
 
@@ -257,7 +300,7 @@ int resolv_requests (Host *hosts, fd_set *afds)
 	return 0;
 }
 
-int setup_host (Host *host, char *hostname, char *port, char *filename, fd_set *afds)
+int add_host (Host *host, char *hostname, char *port, char *filename)
 {
 	struct hostent		*phe;
 
@@ -284,7 +327,7 @@ int setup_host (Host *host, char *hostname, char *port, char *filename, fd_set *
 		fprintf (stderr, "error: failed to open file '%s'\n", filename);
 		return -1;
 	}
-	FD_SET (fileno (host->fin), afds);	/* add the input file to the active fds for select */
+	FD_SET (fileno (host->fin), &afds);	/* add the input file to the active fds for select */
 
 	/* set the status of the host to 'not connected' */
 	host->stat = 0;
