@@ -1,7 +1,9 @@
 #include <string.h>
 #include <stdint.h>
+#define __USE_ISOC99
 #define __USE_POSIX
 #include <stdio.h>
+#undef __USE_ISOC99
 #undef __USE_POSIX
 #include <stdlib.h>
 #include <bits/time.h>
@@ -18,7 +20,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-#define RECV_BUF_SIZE 3000
+#define MAX_BUF_SIZE 3000
 
 typedef struct host {
 	struct sockaddr_in	sin;	/* the server socket address */
@@ -95,9 +97,9 @@ int send_cmd (Host *hosts, int idx)
 int receive (Host *hosts, int idx, fd_set *afds)
 {
 	int	len;
-	char	buf[RECV_BUF_SIZE + 1], *token, *html_msg;
+	char	buf[MAX_BUF_SIZE + 1], *token, *html_msg;
 
-	if ((len = read (hosts[idx].sock, buf, RECV_BUF_SIZE)) < 0) {
+	if ((len = read (hosts[idx].sock, buf, MAX_BUF_SIZE)) < 0) {
 		fprintf (stderr, "error: failed to read from hosts[%d]\n", idx);
 		return -1;
 	} else if (len == 0) {
@@ -140,10 +142,11 @@ int contain_prompt (char *s)
 
 void output (char *msg, int idx)
 {
-	fprintf (stdout, "<script>document.all['m%d'].innerHTML += \"", idx);
-	fputs (msg, stdout);
-	fputs ("\";</script>\n", stdout);
-	fflush (stdout);
+	char	buf[MAX_BUF_SIZE + 1] = {0};
+	snprintf (buf, MAX_BUF_SIZE + 1, "<script>document.all['m%d'].innerHTML += \"", idx);
+	strncat (buf, msg, MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "\";</script>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	write (STDOUT_FILENO, buf, strlen (buf));
 }
 
 int try_connect (Host *hosts, fd_set *afds)
@@ -169,28 +172,31 @@ int try_connect (Host *hosts, fd_set *afds)
 void preoutput (Host *hosts)
 {
 	int	i;
-	fputs ("<html>\n", stdout);
-	fputs ("<head>\n", stdout);
-	fputs ("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n", stdout);
-	fputs ("<title>Network Programming Homework 3</title>\n", stdout);
-	fputs ("</head>\n", stdout);
-	fputs ("<body bgcolor=#336699>\n", stdout);
-	fputs ("<font face=\"Courier New\" size=2 color=#FFFF99>\n", stdout);
-	fputs ("<table width=\"800\" border=\"1\">\n", stdout);
-	fputs ("<tr>\n", stdout);
+	char	buf[MAX_BUF_SIZE + 1] = {0}, tmp[64];
+	strncat (buf, "<html>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "<head>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "<title>Network Programming Homework 3</title>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "</head>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "<body bgcolor=#336699>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "<font face=\"Courier New\" size=2 color=#FFFF99>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "<table width=\"800\" border=\"1\">\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "<tr>\n", MAX_BUF_SIZE + 1 - strlen (buf));
 	for (i = 0; i < 5; ++i) {
-		fputs ("<td>", stdout);
+		strncat (buf, "<td>", MAX_BUF_SIZE + 1 - strlen (buf));
 		if (hosts[i].sock)
-			fputs (inet_ntoa (hosts[i].sin.sin_addr), stdout);
-		fputs ("</td>\n", stdout);
+			strncat (buf, inet_ntoa (hosts[i].sin.sin_addr), MAX_BUF_SIZE + 1 - strlen (buf));
+		strncat (buf, "</td>\n", MAX_BUF_SIZE + 1 - strlen (buf));
 	}
-	fputs ("</tr>\n", stdout);
-	fputs ("<tr>\n", stdout);
-	for (i = 0; i < 5; ++i)
-		fprintf (stdout, "<td valign=\"top\" id=\"m%d\"></td>\n", i);
-	fputs ("</tr>\n", stdout);
-	fputs ("</table>\n", stdout);
-	fflush (stdout);
+	strncat (buf, "</tr>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "<tr>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	for (i = 0; i < 5; ++i) {
+		snprintf (tmp, 64, "<td valign=\"top\" id=\"m%d\"></td>\n", i);
+		strncat (buf, tmp, MAX_BUF_SIZE + 1 - strlen (buf));
+	}
+	strncat (buf, "</tr>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "</table>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	write (STDOUT_FILENO, buf, sizeof (buf));
 }
 
 int resolv_requests (Host *hosts, fd_set *afds)
