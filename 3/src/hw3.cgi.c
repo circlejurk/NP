@@ -35,6 +35,7 @@ int resolv_requests (Host *hosts);
 int add_host (Host *host, char *hostname, char *port, char *filename);
 void rm_host (Host *host);
 void preoutput (Host *hosts);
+void postoutput (void);
 int try_connect (Host *hosts);
 void output (char *msg, int idx);
 int receive (Host *hosts, int idx);
@@ -91,6 +92,8 @@ int main (void)
 
 		usleep (1000);	/* sleep for 1 ms */
 	}
+
+	postoutput ();
 
 	return 0;
 }
@@ -183,6 +186,13 @@ int contain_prompt (char *s)
 		++s;
 	}
 	return 0;
+}
+
+void postoutput (void)
+{
+	write (STDOUT_FILENO, "</font>\n", 8);
+	write (STDOUT_FILENO, "</body>\n", 8);
+	write (STDOUT_FILENO, "</html>\n", 8);
 }
 
 void output (char *msg, int idx)
