@@ -86,7 +86,7 @@ int main (void)
 			}
 		}
 
-		usleep (10000);
+		usleep (1000);	/* sleep fo 1 ms */
 	}
 
 	return 0;
