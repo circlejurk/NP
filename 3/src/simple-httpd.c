@@ -117,6 +117,7 @@ void notfound (char *proto)
 
 void set_envs (Header *req)
 {
+	clearenv ();
 	setenv ("SERVER_SOFTWARE", "sake", 1);
 	setenv ("REDIRECT_STATUS", "200", 1);
 	setenv ("DOCUMENT_ROOT", DocRoot, 1);
