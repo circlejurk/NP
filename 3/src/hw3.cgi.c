@@ -175,6 +175,7 @@ void preoutput (Host *hosts)
 {
 	int	i;
 	char	buf[MAX_BUF_SIZE + 1] = {0}, tmp[64];
+	strncat (buf, "Content-Type: text/html\n\n", MAX_BUF_SIZE + 1 - strlen (buf));
 	strncat (buf, "<html>\n", MAX_BUF_SIZE + 1 - strlen (buf));
 	strncat (buf, "<head>\n", MAX_BUF_SIZE + 1 - strlen (buf));
 	strncat (buf, "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n", MAX_BUF_SIZE + 1 - strlen (buf));
