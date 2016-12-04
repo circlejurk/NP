@@ -1,0 +1,237 @@
+#include <string.h>
+#include <stdint.h>
+#define __USE_POSIX
+#include <stdio.h>
+#undef __USE_POSIX
+#include <stdlib.h>
+#include <bits/time.h>
+#ifndef __USE_MISC
+#define __USE_MISC
+#endif
+#include <unistd.h>
+#undef __USE_MISC
+#include <fcntl.h>
+#include <sys/select.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <errno.h>
+
+typedef struct host {
+	struct sockaddr_in	sin;	/* the server socket address */
+	int			sock;	/* the connection socket */
+	FILE			*fin;	/* the batch file for host server input */
+	int			stat;	/* 0: not connected */
+					/* 1: connected but not writable */
+					/* 2: connected and writable */
+} Host;
+
+int resolv_requests (Host *hosts, fd_set *afds);
+int setup_host (Host *host, char *hostname, char *port, char *filename, fd_set *afds);
+void preoutput (Host *hosts);
+int try_connect (Host *hosts, fd_set *afds);
+void output (char *msg, int idx);
+int receive (Host *hosts, int idx);
+int send_cmd (Host *hosts, int idx);
+
+const char	prompt[] = "% ";
+
+int main (void)
+{
+	int		i, nfds = getdtablesize ();
+	fd_set		rfds, afds;
+	Host		hosts[5] = {0};
+	struct timeval	timeout;
+
+	FD_ZERO (&afds);
+
+	/* resolve the requests and set up the hosts */
+	if (resolv_requests (hosts, &afds) < 0)
+		return -1;
+
+	preoutput (hosts);
+
+	while (1) {
+		/* try to connect to servers */
+		if (try_connect (hosts, &afds) < 0)
+			return -1;
+
+		/* copy the active fds into read fds */
+		memcpy (&rfds, &afds, sizeof(rfds));
+		/* select timeout for 1 ms */
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 1000;
+		/* select from the rfds */
+		if (select (nfds, &rfds, NULL, NULL, &timeout) < 0) {
+			fputs ("error: select failed\n", stderr);
+			return -1;
+		}
+
+		for (i = 0; i < 5; ++i) {
+			if (hosts[i].stat == 0)
+				continue;
+			/* receive messages from servers */
+			if (FD_ISSET (hosts[i].sock, &rfds)) {
+				receive (hosts, i);
+			}
+			/* send a command to servers */
+			if (FD_ISSET (fileno (hosts[i].fin), &rfds) && hosts[i].stat == 2) {
+				send_cmd (hosts, i);
+			}
+		}
+	}
+
+	return 0;
+}
+
+int send_cmd (Host *hosts, int idx)
+{
+}
+
+int receive (Host *hosts, int idx)
+{
+}
+
+void output (char *msg, int idx)
+{
+	fprintf (stdout, "<script>document.all['m%d'].innerHTML += \"", idx);
+	fputs (msg, stdout);
+	fputs ("\";</script>\n", stdout);
+}
+
+int try_connect (Host *hosts, fd_set *afds)
+{
+	int	i;
+	for (i = 0; i < 5; ++i) {
+		if (hosts[i].sock && hosts[i].stat == 0) {
+			if (connect (hosts[i].sock, (struct sockaddr *) &hosts[i].sin, sizeof (hosts[i].sin)) < 0) {
+				if (errno != EINPROGRESS && errno != EALREADY) {
+					fprintf (stderr, "error: connect failed at hosts[%d]\n", i);
+					fprintf (stderr, "errno: %d %s\n", errno, strerror (errno));
+					return -1;
+				}
+			} else {
+				FD_SET (hosts[i].sock, afds);
+				hosts[i].stat = 1;
+			}
+		}
+	}
+	return 0;
+}
+
+void preoutput (Host *hosts)
+{
+	int	i;
+	fputs ("<html>\n", stdout);
+	fputs ("<head>\n", stdout);
+	fputs ("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n", stdout);
+	fputs ("<title>Network Programming Homework 3</title>\n", stdout);
+	fputs ("</head>\n", stdout);
+	fputs ("<body bgcolor=#336699>\n", stdout);
+	fputs ("<font face=\"Courier New\" size=2 color=#FFFF99>\n", stdout);
+	fputs ("<table width=\"800\" border=\"1\">\n", stdout);
+	fputs ("<tr>\n", stdout);
+	for (i = 0; i < 5; ++i) {
+		fputs ("<td>", stdout);
+		if (hosts[i].sock)
+			fputs (inet_ntoa (hosts[i].sin.sin_addr), stdout);
+		fputs ("</td>\n", stdout);
+	}
+	fputs ("</tr>\n", stdout);
+	fputs ("<tr>\n", stdout);
+	for (i = 0; i < 5; ++i)
+		fprintf (stdout, "<td valign=\"top\" id=\"m%d\"></td>\n", i);
+	fputs ("</tr>\n", stdout);
+	fputs ("</table>\n", stdout);
+}
+
+int resolv_requests (Host *hosts, fd_set *afds)
+{
+	int	i;
+	char	*qstring;		/* QUERY_STRING */
+	char	*method;		/* REQUEST_METHOD */
+	char	*content_len;		/* CONTENT_LENGTH */
+	char	*token, hostname[64], port[10], filename[32];
+
+	method = getenv ("REQUEST_METHOD");
+	content_len = getenv ("CONTENT_LENGTH");
+
+	/* construct the query string according to the request method */
+	if (strcmp (method, "GET") == 0) {
+		qstring = malloc (strlen (getenv ("QUERY_STRING")) + 1);
+		strcpy (qstring, getenv ("QUERY_STRING"));
+	} else if (strcmp (method, "POST") == 0) {
+		qstring = malloc (atoi (content_len) + 1);
+		fgets (qstring, atoi (content_len) + 1, stdin);
+		/*fputs ("Sorry, the POST method is currently not supported.\n", stdout);*/
+		/*return -1;*/
+	} else {
+		fputs ("What's the matter with you?\n", stdout);
+		return -1;
+	}
+
+	token = strtok (qstring, "&");
+	while (token != NULL) {
+		/* reset to empty string */
+		hostname[0] = port[0] = filename[0] = 0;
+		/* read the hostname or IP address */
+		sscanf (token, "h%d=%s", &i, hostname);
+		token = strtok (NULL, "&");
+		/* read the port of the service */
+		sscanf (token, "p%d=%s", &i, port);
+		token = strtok (NULL, "&");
+		/* read the filename of the batch input */
+		sscanf (token, "f%d=%s", &i, filename);
+		token = strtok (NULL, "&");
+
+		/* check input validity */
+		if (*hostname == 0 || *port == 0 || *filename == 0)
+			continue;
+
+		if (setup_host (&hosts[i - 1], hostname, port, filename, afds) < 0) {
+			free (qstring);
+			fprintf (stderr, "error: setup_host failed at hosts[%d]\n", i - 1);
+			return -1;
+		}
+
+	}
+
+	free (qstring);
+	return 0;
+}
+
+int setup_host (Host *host, char *hostname, char *port, char *filename, fd_set *afds)
+{
+	struct hostent		*phe;
+
+	/* set up server socket addr */
+	memset (&host->sin, 0, sizeof (host->sin));
+	host->sin.sin_family = AF_INET;
+	host->sin.sin_port = htons ((uint16_t) atoi (port));
+	if ((phe = gethostbyname (hostname)))
+		host->sin.sin_addr = *((struct in_addr *) phe->h_addr_list[0]);
+	else if ((host->sin.sin_addr.s_addr = inet_addr (hostname)) == INADDR_NONE) {
+		fprintf (stderr, "error: cannot get the hostname '%s'\n", hostname);
+		return -1;
+	}
+
+	/* allocate the socket */
+	if ((host->sock = socket (PF_INET, SOCK_STREAM, 0)) < 0) {
+		fputs ("error: failed to build a socket\n", stderr);
+		return -1;
+	}
+	fcntl(host->sock, F_SETFL, O_NONBLOCK);	/* set the socket as non-blocking mode */
+
+	/* open the input file */
+	if ((host->fin = fopen (filename, "r")) == NULL) {
+		fprintf (stderr, "error: failed to open file '%s'\n", filename);
+		return -1;
+	}
+	FD_SET (fileno (host->fin), afds);	/* add the input file to the active fds for select */
+
+	/* set the status of the host to 'not connected' */
+	host->stat = 0;
+
+	return 0;
+}
