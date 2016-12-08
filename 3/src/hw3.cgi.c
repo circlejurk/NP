@@ -36,7 +36,7 @@ int add_host (Host *host, char *hostname, char *port, char *filename);
 void rm_host (Host *host);
 void preoutput (Host *hosts);
 void postoutput (void);
-int try_connect (Host *hosts);
+int try_connect (Host *host);
 void output (char *msg, int idx);
 int receive (Host *hosts, int idx);
 int contain_prompt (char *s);
@@ -49,7 +49,7 @@ int main (void)
 {
 	int		i, nfds = getdtablesize ();
 	Host		hosts[5] = {0};
-	struct timeval	timeout;
+	struct timeval	timeout = {0};
 
 	FD_ZERO (&afds);
 
@@ -59,38 +59,39 @@ int main (void)
 
 	preoutput (hosts);
 
+	i = 0;
 	while (hosts[0].sock + hosts[1].sock + hosts[2].sock + hosts[3].sock + hosts[4].sock) {
 		/* try to connect to servers */
-		if (try_connect (hosts) < 0)
+		if (try_connect (&hosts[i]) < 0)
 			return -1;
 
-		/* copy the active fds into read fds */
-		memcpy (&rfds, &afds, sizeof(rfds));
-		/* select timeout for 10 ms */
-		timeout.tv_sec = 0;
-		timeout.tv_usec = 10000;
-		/* select from the rfds */
-		if (select (nfds, &rfds, NULL, NULL, &timeout) < 0) {
-			fputs ("error: select failed\n", stderr);
-			return -1;
-		}
-
-		for (i = 0; i < 5; ++i) {
-			if (hosts[i].stat == 0)
-				continue;
-			/* receive messages from servers */
-			if (FD_ISSET (hosts[i].sock, &rfds)) {
-				if (receive (hosts, i) < 0)
-					return -1;
+		/* if it has been connected to the server */
+		if (hosts[i].stat > 0) {
+			/* copy the active fds into read fds */
+			memcpy (&rfds, &afds, sizeof(rfds));
+			/* select timeout for 10 ms */
+			timeout.tv_sec = 0;
+			timeout.tv_usec = 10000;
+			/* select from the rfds */
+			if (select (nfds, &rfds, NULL, NULL, &timeout) < 0) {
+				fputs ("error: select failed\n", stderr);
+				return -1;
 			}
+
 			/* send a command to servers */
 			if (hosts[i].stat == 2 && FD_ISSET (fileno (hosts[i].fin), &rfds)) {
 				if (send_cmd (hosts, i) < 0)
 					return -1;
 			}
+			/* receive messages from servers */
+			if (FD_ISSET (hosts[i].sock, &rfds)) {
+				if (receive (hosts, i) < 0)
+					return -1;
+			}
 		}
 
-		usleep (1000);	/* sleep for 1 ms */
+		usleep (500000);	/* sleep for 500 ms */
+		i = (i + 1) % 5;
 	}
 
 	postoutput ();
@@ -204,21 +205,18 @@ void output (char *msg, int idx)
 	write (STDOUT_FILENO, buf, strlen (buf));
 }
 
-int try_connect (Host *hosts)
+int try_connect (Host *host)
 {
-	int	i;
-	for (i = 0; i < 5; ++i) {
-		if (hosts[i].sock && hosts[i].stat == 0) {
-			if (connect (hosts[i].sock, (struct sockaddr *) &hosts[i].sin, sizeof (hosts[i].sin)) < 0) {
-				if (errno != EINPROGRESS && errno != EALREADY) {
-					fprintf (stderr, "error: connect failed at hosts[%d]\n", i);
-					fprintf (stderr, "errno: %d %s\n", errno, strerror (errno));
-					return -1;
-				}
-			} else {
-				FD_SET (hosts[i].sock, &afds);
-				hosts[i].stat = 1;
+	if (host->sock && host->stat == 0) {
+		if (connect (host->sock, (struct sockaddr *) &host->sin, sizeof (host->sin)) < 0) {
+			if (errno != EINPROGRESS && errno != EALREADY) {
+				fputs ("error: connect failed\n", stderr);
+				fprintf (stderr, "errno: %d %s\n", errno, strerror (errno));
+				return -1;
 			}
+		} else {
+			FD_SET (host->sock, &afds);
+			host->stat = 1;
 		}
 	}
 	return 0;
