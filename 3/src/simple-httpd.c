@@ -56,15 +56,15 @@ int httpd (void)
 	read_req (&req);
 	set_envs (&req);
 
-	if (access (req.fullpath, F_OK|X_OK) != -1) {
+	if (access (req.fullpath, F_OK|X_OK) != -1) {		/* executables */
 		OK (req.proto);
 		execl (req.fullpath, req.fullpath, NULL);
-	} else if (access (req.fullpath, F_OK|R_OK) != -1) {
+	} else if (access (req.fullpath, F_OK|R_OK) != -1) {	/* files */
 		OK (req.proto);
 		readfile (req.fullpath);
-	} else if (access (req.fullpath, F_OK) != -1) {
+	} else if (access (req.fullpath, F_OK) != -1) {		/* 403 */
 		forbidden (req.proto);
-	} else {
+	} else {						/* 404 */
 		notfound (req.proto);
 	}
 
@@ -99,8 +99,11 @@ void forbidden (char *proto)
 	snprintf (buf, MAX_BUF_SIZE + 1,
 			"%s 403 Forbidden\n"
 			"Server: sake\n"
-			"Content-Type: text/plain\n\n"
-			"403 Forbidden\n", proto);
+			"Content-Type: text/html\n\n"
+			"<html>\n"
+			"<head><title>403 Forbidden</title></head>\n"
+			"<body><h1>403 Forbidden</h1></body>\n"
+			"</html>\n", proto);
 	reply (buf);
 }
 
@@ -110,8 +113,11 @@ void notfound (char *proto)
 	snprintf (buf, MAX_BUF_SIZE + 1,
 			"%s 404 Not Found\n"
 			"Server: sake\n"
-			"Content-Type: text/plain\n\n"
-			"404 Not Found\n", proto);
+			"Content-Type: text/html\n\n"
+			"<html>\n"
+			"<head><title>404 Not Found</title></head>\n"
+			"<body><h1>404 Not Found</h1></body>\n"
+			"</html>\n", proto);
 	reply (buf);
 }
 
@@ -150,8 +156,6 @@ void set_envs (Header *req)
 		setenv ("HTTP_CONNECTION", req->connection, 1);
 	if (req->dnt)
 		setenv ("HTTP_DNT", req->dnt, 1);
-
-	/* TODO: add SERVER_ADDR */
 }
 
 void clear_req (Header *req)
@@ -188,7 +192,7 @@ void read_req (Header *req)
 	/* method */
 	token = strtok (buf, " \r\n");
 	req->method = malloc (strlen (token) + 1);
-	strncpy (req->method, token, 5);
+	strncpy (req->method, token, strlen (token) + 1);
 	/* path */
 	token = strtok (NULL, " \r\n");
 	for (q = token; *q != '?' && *q != 0; ++q);
