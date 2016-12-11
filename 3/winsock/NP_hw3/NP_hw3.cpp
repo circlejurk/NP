@@ -25,6 +25,7 @@ typedef struct host {
 					/* 1: connected but not writable */
 					/* 3: connected and writable */
 					/* 7: 3 + FD_WRITE */
+					/* -1: closed */
 } Host;
 
 struct http_cli {
@@ -64,6 +65,7 @@ void rm_host (Host *host);
 int contain_prompt (char *s);
 void output (SOCKET sock, char *msg, int idx);
 int send_cmd (struct http_cli *client, int idx);
+void check_close (struct http_cli *client);
 void postoutput (SOCKET sock);
 
 BOOL CALLBACK MainDlgProc (HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
@@ -137,6 +139,8 @@ BOOL CALLBACK MainDlgProc (HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam
 					break;
 				case FD_CLOSE:
 					EditPrintf(hwndEdit, TEXT("=== CLOSE ===\r\n"));
+					for (size_t i = 0; i < clients.size(); ++i)
+						check_close (&clients[i]);
 					break;
 			};
 			break;
@@ -146,6 +150,18 @@ BOOL CALLBACK MainDlgProc (HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam
 	};
 
 	return TRUE;
+}
+
+void check_close (struct http_cli *client)
+{
+	for (int i = 0; i < 5; ++i) {
+		if (client->hosts[i].stat == -1)
+			rm_host (&client->hosts[i]);
+	}
+	if (client->hosts[0].sock + client->hosts[1].sock + client->hosts[2].sock + client->hosts[3].sock + client->hosts[4].sock == 0) {
+		postoutput (client->sock);
+		closesocket (client->sock);
+	}
 }
 
 int send_cmd (struct http_cli *client, int idx)
@@ -171,7 +187,10 @@ int send_cmd (struct http_cli *client, int idx)
 		output (client->sock, html_msg, idx);
 		free (html_msg);
 	}
-	client->hosts[idx].stat &= ~(1<<1);
+	if (strcmp (cmd, "exit") == 0)
+		client->hosts[idx].stat = -1;
+	else if (client->hosts[idx].stat != -1)
+		client->hosts[idx].stat &= ~(1<<1);
 
 	return 0;
 }
@@ -190,10 +209,6 @@ int receive (struct http_cli *client, int idx)
 	} else if (len == 0) {
 		/* close the connection to the host */
 		rm_host (&client->hosts[idx]);
-		if (client->hosts[0].sock + client->hosts[1].sock + client->hosts[2].sock + client->hosts[3].sock + client->hosts[4].sock == 0) {
-			postoutput (client->sock);
-			closesocket (client->sock);
-		}
 	} else {
 		buf[len] = 0;	/* let the string be null-terminated */
 		/* print the received messages back to the user */
@@ -217,6 +232,7 @@ int receive (struct http_cli *client, int idx)
 			token = c;
 		}
 		send_cmd (client, idx);
+		Sleep (500);
 	}
 
 	return len;
