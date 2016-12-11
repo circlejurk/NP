@@ -23,7 +23,8 @@ typedef struct host {
 	FILE			*fin;	/* the batch file for host server input */
 	int			stat;	/* 0: not connected */
 					/* 1: connected but not writable */
-					/* 2: connected and writable */
+					/* 3: connected and writable */
+					/* 7: 3 + FD_WRITE */
 } Host;
 
 struct http_cli {
@@ -40,21 +41,248 @@ struct http_cli {
 			/* -1: have been disconnected */
 };
 
+const char	prompt[] = "% ";
 vector<struct http_cli>	clients;
 
-/************ the cgi part ************/
+int EditPrintf (HWND, TCHAR *, ...);
+int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow);
+BOOL CALLBACK MainDlgProc (HWND, UINT, WPARAM, LPARAM);
+BOOL passiveTCP (int port, int qlen, HWND hwnd, HWND hwndEdit, SOCKET *msock);
+void read_req (int i);
+void http_out (int i, HWND hwnd);
+void clear_cli (int i);
+void OK (int i);
+void notfound (int i);
+void readfile (int i);
 
-void exec_hw3_cgi (int i);
+void exec_hw3_cgi (int i, HWND hwnd);
 int resolv_requests (int i);
 int add_host (Host *host, char *hostname, char *port, char *filename);
 void preoutput (int ci);
+int receive (struct http_cli *client, int idx);
+void rm_host (Host *host);
+int contain_prompt (char *s);
+void output (SOCKET sock, char *msg, int idx);
+int send_cmd (struct http_cli *client, int idx);
+void postoutput (SOCKET sock);
 
-void exec_hw3_cgi (int i)
+BOOL CALLBACK MainDlgProc (HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
 {
+	static HWND		hwndEdit;
+	static SOCKET		msock;
+	static struct http_cli	client;
+	WSADATA			wsaData;
+
+	switch (Message)
+	{
+		case WM_INITDIALOG:
+			hwndEdit = GetDlgItem (hwnd, IDC_RESULT);
+			break;
+		case WM_COMMAND:
+			switch (LOWORD(wParam))
+			{
+				case ID_LISTEN:
+					WSAStartup (MAKEWORD(2, 0), &wsaData);
+					return passiveTCP (SERVER_PORT, 0, hwnd, hwndEdit, &msock);
+					break;
+				case ID_EXIT:
+					EndDialog (hwnd, 0);
+					break;
+			};
+			break;
+		case WM_CLOSE:
+			EndDialog (hwnd, 0);
+			break;
+		case WM_SOCK_NOTIFY:
+			switch(WSAGETSELECTEVENT(lParam))
+			{
+				case FD_ACCEPT:
+					memset (&client, 0, sizeof (struct http_cli));
+					client.sock = accept(msock, NULL, NULL);
+					clients.push_back (client);
+					EditPrintf(hwndEdit, TEXT("=== Accept one new client(%d), List size:%d ===\r\n"), client.sock, clients.size());
+					break;
+				case FD_READ:
+					for (size_t i = 0; i < clients.size(); ++i)
+						read_req (i);
+					break;
+				case FD_WRITE:
+					for (size_t i = 0; i < clients.size(); ++i)
+						http_out (i, hwnd);
+					break;
+				case FD_CLOSE:
+					for (size_t i = 0; i < clients.size(); ++i)
+						clear_cli (i);
+					break;
+			};
+			break;
+		case WM_HOST_NOTIFY:
+			switch(WSAGETSELECTEVENT(lParam))
+			{
+				case FD_CONNECT:
+					EditPrintf(hwndEdit, TEXT("=== CONNECT ===\r\n"));
+					break;
+				case FD_READ:
+					EditPrintf(hwndEdit, TEXT("=== READ ===\r\n"));
+					for (size_t i = 0; i < clients.size(); ++i)
+						for (int j = 0; j < 5; ++j)
+							receive (&clients[i], j);
+					break;
+				case FD_WRITE:
+					EditPrintf(hwndEdit, TEXT("=== WRITE ===\r\n"));
+					for (size_t i = 0; i < clients.size(); ++i)
+						for (int j = 0; j < 5; ++j)
+							if (clients[i].hosts[j].sock)
+								clients[i].hosts[j].stat |= 1<<2;
+					break;
+				case FD_CLOSE:
+					EditPrintf(hwndEdit, TEXT("=== CLOSE ===\r\n"));
+					break;
+			};
+			break;
+
+		default:
+			return FALSE;
+	};
+
+	return TRUE;
+}
+
+int send_cmd (struct http_cli *client, int idx)
+{
+	char	cmd[MAX_BUF_SIZE + 1], *p, *html_msg;
+
+	if (client->hosts[idx].sock == 0 || client->hosts[idx].stat != 7)
+		return 0;
+
+	p = fgets (cmd, MAX_BUF_SIZE + 1, client->hosts[idx].fin);
+	if (ferror (client->hosts[idx].fin)) {				/* error */
+		fputs ("error: fgets failed when reading commands\n", stderr);
+		return -1;
+	} else if (feof (client->hosts[idx].fin) && p == NULL) {	/* EOF */
+		send (client->hosts[idx].sock, "exit\n", 5, 0);
+	} else {
+		send (client->hosts[idx].sock, cmd, strlen (cmd), 0);
+		strtok (cmd, "\r\n");
+		html_msg = (char *) malloc (strlen (cmd) + 12);
+		strcpy (html_msg, "<b>");
+		strcat (html_msg, cmd);
+		strcat (html_msg, "</b><br>");
+		output (client->sock, html_msg, idx);
+		free (html_msg);
+	}
+	client->hosts[idx].stat &= ~(1<<1);
+
+	return 0;
+}
+
+int receive (struct http_cli *client, int idx)
+{
+	int	len;
+	char	buf[MAX_BUF_SIZE + 1], *token, *c, *html_msg;
+
+	if (client->hosts[idx].sock == 0 || ! (client->hosts[idx].stat & 1))
+		return 0;
+
+	if ((len = recv (client->hosts[idx].sock, buf, MAX_BUF_SIZE, 0)) < 0) {
+		fprintf (stderr, "error: failed to read from hosts[%d]\n", idx);
+		return -1;
+	} else if (len == 0) {
+		/* close the connection to the host */
+		rm_host (&client->hosts[idx]);
+		if (client->hosts[0].sock + client->hosts[1].sock + client->hosts[2].sock + client->hosts[3].sock + client->hosts[4].sock == 0) {
+			postoutput (client->sock);
+			closesocket (client->sock);
+		}
+	} else {
+		buf[len] = 0;	/* let the string be null-terminated */
+		/* print the received messages back to the user */
+		token = buf;
+		while (token[0] != 0) {
+			for (c = token; *c != '\n' && *c != 0; ++c);
+			if (*c == '\n') {
+				*c = 0;
+				++c;
+			}
+
+			if (contain_prompt (token))
+				client->hosts[idx].stat |= 1<<1;
+			html_msg = (char *) malloc (strlen (token) + 5);
+			strcpy (html_msg, token);
+			if (strcmp (token, prompt) != 0)
+				strncat (html_msg, "<br>", 5);
+			output (client->sock, html_msg, idx);
+			free (html_msg);
+
+			token = c;
+		}
+		send_cmd (client, idx);
+	}
+
+	return len;
+}
+
+void postoutput (SOCKET sock)
+{
+	send (sock, "</font>\n", 8, 0);
+	send (sock, "</body>\n", 8, 0);
+	send (sock, "</html>\n", 8, 0);
+}
+
+void output (SOCKET sock, char *msg, int idx)
+{
+	char	buf[MAX_BUF_SIZE + 1] = {0};
+	sprintf (buf, "<script>document.all['m%d'].innerHTML += \"", idx);
+	strncat (buf, msg, MAX_BUF_SIZE + 1 - strlen (buf));
+	strncat (buf, "\";</script>\n", MAX_BUF_SIZE + 1 - strlen (buf));
+	send (sock, buf, strlen (buf), 0);
+}
+
+int contain_prompt (char *s)
+{
+	int	i = 0;
+	while (*s != 0) {
+		if (*s == prompt[i]) {
+			if (++i == strlen (prompt))
+				return 1;
+		} else
+			i = 0;
+		++s;
+	}
+	return 0;
+}
+
+void rm_host (Host *host)
+{
+	if (host->sock != 0) {
+		if (host->stat)
+			closesocket (host->sock);
+		fclose (host->fin);
+		memset (host, 0, sizeof (Host));
+	}
+}
+
+void exec_hw3_cgi (int i, HWND hwnd)
+{
+	int	err;
 	clients[i].stat = 3;
 	if (resolv_requests (i) < 0)
 		return;
 	preoutput (i);
+
+	/* async select for hosts */
+	for (int j = 0; j < 5; ++j) {
+		if (clients[i].hosts[j].sock == 0)
+			continue;
+		err = WSAAsyncSelect (clients[i].hosts[j].sock, hwnd, WM_HOST_NOTIFY, FD_CONNECT | FD_CLOSE | FD_READ | FD_WRITE);
+		if (err == SOCKET_ERROR) {
+			closesocket (clients[i].hosts[j].sock);
+			WSACleanup();
+			return;
+		}
+		connect (clients[i].hosts[j].sock, (sockaddr *) &clients[i].hosts[j].sin, sizeof (clients[i].hosts[j].sin));
+		clients[i].hosts[j].stat = 1;
+	}
 }
 
 void preoutput (int ci)
@@ -154,120 +382,27 @@ int add_host (Host *host, char *hostname, char *port, char *filename)
 	return 0;
 }
 
-/************ the httpd part ************/
-
-int EditPrintf (HWND, TCHAR *, ...);
-int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow);
-BOOL CALLBACK MainDlgProc (HWND, UINT, WPARAM, LPARAM);
-BOOL passiveTCP (int port, int qlen, HWND hwnd, HWND hwndEdit, SOCKET *msock);
-void read_req (int i);
-void http_out (int i);
-void clear_cli (int i);
-void OK (int i);
-void notfound (int i);
-void readfile (int i);
-
-struct arg {
-	HWND	hwnd;
-	size_t	i;
-};
-
-BOOL CALLBACK MainDlgProc (HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam)
+void http_out (int i, HWND hwnd)
 {
-	static HWND		hwndEdit;
-	static SOCKET		msock;
-	static struct http_cli	client;
-	WSADATA			wsaData;
-	//static struct arg	*Arg = (struct arg *) malloc (sizeof (struct arg));
-
-	switch (Message)
-	{
-		case WM_INITDIALOG:
-			hwndEdit = GetDlgItem (hwnd, IDC_RESULT);
+	int	err;
+	switch (clients[i].stat) {
+		case 2:		/* execute the hw3.cgi codes */
+			OK (i);
+			exec_hw3_cgi (i, hwnd);
 			break;
-		case WM_COMMAND:
-			switch (LOWORD(wParam))
-			{
-				case ID_LISTEN:
-					WSAStartup (MAKEWORD(2, 0), &wsaData);
-					return passiveTCP (SERVER_PORT, 0, hwnd, hwndEdit, &msock);
-					break;
-				case ID_EXIT:
-					EndDialog (hwnd, 0);
-					break;
-			};
+		case 1:
+			if (_access (clients[i].path, F_OK|R_OK) != -1) {
+				/* retrieve the form_get.htm */
+				OK (i);
+				readfile (i);
+			} else {
+				/* 404 */
+				notfound (i);
+			}
+			clients[i].stat = -1;
+			clear_cli (i);
 			break;
-		case WM_CLOSE:
-			EndDialog (hwnd, 0);
-			break;
-		case WM_SOCK_NOTIFY:
-			switch(WSAGETSELECTEVENT(lParam))
-			{
-				case FD_ACCEPT:
-					memset (&client, 0, sizeof (struct http_cli));
-					client.sock = accept(msock, NULL, NULL);
-					clients.push_back (client);
-					EditPrintf(hwndEdit, TEXT("=== Accept one new client(%d), List size:%d ===\r\n"), client.sock, clients.size());
-					break;
-				case FD_READ:
-					for (size_t i = 0; i < clients.size(); ++i)
-						read_req (i);
-					break;
-				case FD_WRITE:
-					for (size_t i = 0; i < clients.size(); ++i) {
-						_beginthread ((void (*) (void *)) http_out, 0, (void *) i);
-					}
-					break;
-				case FD_CLOSE:
-					for (size_t i = 0; i < clients.size(); ++i)
-						clear_cli (i);
-					break;
-			};
-			break;
-		case WM_HOST_NOTIFY:
-			switch(WSAGETSELECTEVENT(lParam))
-			{
-				case FD_CONNECT:
-					EditPrintf(hwndEdit, TEXT("=== CONNECT ===\r\n"));
-					break;
-				case FD_READ:
-					EditPrintf(hwndEdit, TEXT("=== READ ===\r\n"));
-					break;
-				case FD_WRITE:
-					EditPrintf(hwndEdit, TEXT("=== WRITE ===\r\n"));
-					break;
-				case FD_CLOSE:
-					EditPrintf(hwndEdit, TEXT("=== CLOSE ===\r\n"));
-					break;
-			};
-			break;
-
-		default:
-			return FALSE;
-	};
-
-	return TRUE;
-}
-
-void http_out (int i)
-{
-	if (clients[i].stat != 1 && clients[i].stat != 2)
-		return;
-	if (clients[i].stat == 2) {
-		/* execute the hw3.cgi codes */
-		OK (i);
-		exec_hw3_cgi (i);
-		return;
 	}
-	if (clients[i].stat == 1 && _access (clients[i].path, F_OK|R_OK) != -1) {
-		/* retrieve the form_get.htm */
-		OK (i);
-		readfile (i);
-	} else {
-		notfound (i);	/* 404 */
-	}
-	clients[i].stat = -1;
-	clear_cli (i);
 }
 
 void readfile (int i)
