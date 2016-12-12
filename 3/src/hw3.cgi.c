@@ -90,7 +90,7 @@ int main (void)
 			}
 		}
 
-		usleep (500000);	/* sleep for 500 ms */
+		usleep (100000);	/* sleep for 100 ms */
 		i = (i + 1) % 5;
 	}
 
