@@ -18,21 +18,20 @@ typedef struct SOCKS4_rep {
 	uint8_t		vn;
 	uint8_t		cd;
 	uint16_t	dest_port;
-	uint32_t	dest_ip;
+	struct in_addr	dest_ip;
 } Reply;
 
 int socks (struct sockaddr_in src);
 int recv_req (void);
 int check_fw (void);
+void verbose (struct sockaddr_in *src);
+int CONNECT (void);
+int BIND (void);
 
-int readline (char *line, int *connection);
 int isnumber (char *s);
+int readline (char *line, int *connection);
 
 int line_to_cmds (char *line, char **cmds);
 void clear_cmds (int progc, char **cmds);
-
-int cmd_to_argv (char *cmd, char **argv, char **in_file, char **out_file);
-void clear_argv (int argc, char **argv, char **in_file, char **out_file);
-void open_files (const char *in_file, const char *out_file);
 
 #endif

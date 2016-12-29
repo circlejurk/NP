@@ -42,25 +42,54 @@ int socks (struct sockaddr_in src)
 		return -1;
 	}
 
-	/* check firewall rules and send the SOCKS4 reply accordingly */
-	if (check_fw ()) {
-		/* reply that the connection is granted */
-		return 0;
-	} else {
-		/* reply that the connection is rejected */
-		return -1;
-	}
-	/* print the verbose messages to the server side */
+	/* check firewall rules */
+	if (check_fw ())
+		rep.cd = 90;	/* request granted */
+	else
+		rep.cd = 91;	/* request rejected */
 
-	/* build the connection according to the modes */
+	/* send the SOCKS4 reply */
+	write (STDOUT_FILENO, &rep, sizeof (Reply));
+
+	/* end the connection if the request is rejected */
+	if (rep.cd == 91) {
+		verbose (&src);
+		return 0;
+	}
+
+	/* build connections */
 	if (req.cd == 1)	/* CONNECT mode */
-		/*CONNECT ();*/
-		;
+		CONNECT ();
 	else if (req.cd == 2)	/* BIND mode */
 		/*BIND ();*/
 		;
 
 	return 0;
+}
+
+int CONNECT (void)
+{
+	return 0;
+}
+
+void verbose (struct sockaddr_in *src)
+{
+	fprintf (stderr, "VN: %d, CD: %d, USERID: %s, DN: %s\n", req.vn, req.cd, req.user, req.dn);
+	fprintf (stderr, "DEST IP: %s, DEST PORT: %d\n", inet_ntoa (req.dest_ip), req.dest_port);
+	fprintf (stderr, "SRC IP: %s, SRC PORT: %d\n", inet_ntoa (src->sin_addr), src->sin_port);
+
+	if (req.cd == 1)
+		fputs ("SOCKS_CONNECT ", stderr);
+	else
+		fputs ("SOCKS_BIND ", stderr);
+
+	if (rep.cd == 90) {
+		fputs ("GRANTED\n", stderr);
+	} else {
+		fputs ("REJECTED\n", stderr);
+	}
+
+	fputs ("\n", stderr);
 }
 
 int check_fw (void)
@@ -127,6 +156,11 @@ int recv_req (void)
 		fputs ("error: \n", stderr);
 		return -1;
 	}
+
+	/* fill in the SOCK4 reply (except the rep.cd) */
+	rep.vn = req.vn;
+	rep.dest_port = req.dest_port;
+	rep.dest_ip = req.dest_ip;
 
 	return 0;
 }
