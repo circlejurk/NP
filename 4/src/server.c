@@ -39,7 +39,7 @@ int main (int argc, char **argv)
 
 	/* build a TCP connection */
 	if ((msock = passiveTCP (port, 0)) < 0) {
-		fputs ("server error: passiveTCP failed\n", stderr);
+		fputs ("error: passiveTCP failed\n", stderr);
 		return -1;
 	}
 
@@ -49,13 +49,13 @@ int main (int argc, char **argv)
 		if (ssock < 0) {
 			if (errno == EINTR)
 				continue;
-			fputs ("server error: accept failed\n", stderr);
+			fputs ("error: accept failed\n", stderr);
 			return -1;
 		}
 
 		/* fork another process to handle the request */
 		if ((childpid = fork ()) < 0) {
-			fputs ("server error: fork failed\n", stderr);
+			fputs ("error: fork failed\n", stderr);
 			return -1;
 		} else if (childpid == 0) {
 			dup2 (ssock, STDIN_FILENO);
@@ -84,7 +84,7 @@ int passiveTCP (int port, int qlen)
 
 	/* open a TCP socket */
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		fputs ("server error: cannot open socket\n", stderr);
+		fputs ("error: cannot open socket\n", stderr);
 		return -1;
 	}
 
@@ -96,13 +96,13 @@ int passiveTCP (int port, int qlen)
 
 	/* bind to server address */
 	if (bind (sockfd, (const struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-		fputs ("server error: cannot bind local address\n", stderr);
+		fputs ("error: cannot bind local address\n", stderr);
 		return -1;
 	}
 
 	/* listen for requests */
 	if (listen (sockfd, qlen) < 0) {
-		fputs ("server error: listen failed\n", stderr);
+		fputs ("error: listen failed\n", stderr);
 		return -1;
 	}
 
