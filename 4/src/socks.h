@@ -30,9 +30,6 @@ void send_reply (void);
 void verbose (struct sockaddr_in *src);
 int CONNECT (void);
 int BIND (void);
-
 int transmission (int dest);
-
-int readline (char *line, int *connection);
 
 #endif
