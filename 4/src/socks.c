@@ -81,7 +81,7 @@ int socks (struct sockaddr_in src)
 int transmission (int dest)
 {
 	int	nfds = dest + 1;
-	char	buf[MAX_BUF_SIZE];
+	char	buf[TRANS_SIZE];
 	fd_set	rfds, afds;
 
 	/* initialize the active file descriptor set */
@@ -99,13 +99,13 @@ int transmission (int dest)
 		}
 		/* read from src and write to dest */
 		if (FD_ISSET (STDIN_FILENO, &rfds)) {
-			read (STDIN_FILENO, buf, MAX_BUF_SIZE);
-			write (dest, buf, MAX_BUF_SIZE);
+			read (STDIN_FILENO, buf, TRANS_SIZE);
+			write (dest, buf, TRANS_SIZE);
 		}
 		/* read from dest and write to src */
 		if (FD_ISSET (dest, &rfds)) {
-			read (dest, buf, MAX_BUF_SIZE);
-			write (STDOUT_FILENO, buf, MAX_BUF_SIZE);
+			read (dest, buf, TRANS_SIZE);
+			write (STDOUT_FILENO, buf, TRANS_SIZE);
 		}
 	}
 
