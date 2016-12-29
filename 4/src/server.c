@@ -62,7 +62,7 @@ int main (int argc, char **argv)
 			dup2 (ssock, STDOUT_FILENO);
 			close (msock);
 			close (ssock);
-			exit (socks (&cli_addr));
+			exit (socks (cli_addr));
 		}
 		close (ssock);
 	}
