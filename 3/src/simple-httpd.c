@@ -141,15 +141,6 @@ void set_envs (Header *req)
 		setenv ("SERVER_PORT", req->port, 1);
 	if (req->content_len)
 		setenv ("CONTENT_LENGTH", req->content_len, 1);
-	/* the 7 lines following will be deleted after demo */
-	else
-		setenv ("CONTENT_LENGTH", "", 1);
-	setenv ("REMOTE_HOST", "remote-host", 1);
-	setenv ("REMOTE_ADDR", "remote-addr", 1);
-	setenv ("AUTH_TYPE", "auth-type", 1);
-	setenv ("REMOTE_USER", "remote-user", 1);
-	setenv ("REMOTE_IDENT", "remote-ident", 1);
-	/* the 7 lines above will be deleted after demo */
 	if (req->user_agent)
 		setenv ("HTTP_USER_AGENT", req->user_agent, 1);
 	if (req->connection)
