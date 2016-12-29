@@ -1,7 +1,7 @@
 #ifndef SOCKS_H
 #define SOCKS_H
 
-#define TRANS_SIZE	1000000
+#define TRANS_SIZE	10000000
 #define MAX_BUF_SIZE	500
 #define MAX_USER_LEN	100
 #define MAX_DN_LEN	300
