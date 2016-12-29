@@ -20,10 +20,13 @@
 #include <arpa/inet.h>
 #include <errno.h>
 
-#define MAX_BUF_SIZE 3000
+#define MAX_BUF_SIZE	3000
+#define MAX_USER_LEN	100
+#define MAX_DN_LEN	300
 
 typedef struct host {
 	struct sockaddr_in	sin;	/* the server socket address */
+	struct sockaddr_in	shsin;	/* the SOCKS4 server */
 	int			sock;	/* the connection socket */
 	FILE			*fin;	/* the batch file for host server input */
 	int			stat;	/* 0: not connected */
@@ -31,16 +34,34 @@ typedef struct host {
 					/* 2: connected and writable */
 } Host;
 
+typedef struct SOCKS4_req {
+	uint8_t		vn;
+	uint8_t		cd;
+	uint16_t	dest_port;
+	struct in_addr	dest_ip;
+	char		user[MAX_USER_LEN];
+	char		dn[MAX_DN_LEN];
+} Request;
+
+typedef struct SOCKS4_rep {
+	uint8_t		vn;
+	uint8_t		cd;
+	uint16_t	dest_port;
+	struct in_addr	dest_ip;
+} Reply;
+
 int resolv_requests (Host *hosts);
-int add_host (Host *host, char *hostname, char *port, char *filename);
+int add_host (Host *host, char *hostname, char *port, char *filename, char *shname, char *shport);
 void rm_host (Host *host);
 void preoutput (Host *hosts);
 void postoutput (void);
-int try_connect (Host *host);
+int connect_SOCKS (Host *host);
 void output (char *msg, int idx);
 int receive (Host *hosts, int idx);
 int contain_prompt (char *s);
 int send_cmd (Host *hosts, int idx);
+void send_req (Host *host);
+void recv_rep (Host *host);
 
 const char	prompt[] = "% ";
 fd_set		rfds, afds;
@@ -59,12 +80,14 @@ int main (void)
 
 	preoutput (hosts);
 
+	/* blocking-connect to servers */
+	for (i = 0; i < 5; ++i) {
+		if (connect_SOCKS (&hosts[i]) < 0)
+			return -1;
+	}
+
 	i = 0;
 	while (hosts[0].sock + hosts[1].sock + hosts[2].sock + hosts[3].sock + hosts[4].sock) {
-		/* try to connect to servers */
-		if (try_connect (&hosts[i]) < 0)
-			return -1;
-
 		/* if it has been connected to the server */
 		if (hosts[i].stat > 0) {
 			/* copy the active fds into read fds */
@@ -205,21 +228,41 @@ void output (char *msg, int idx)
 	write (STDOUT_FILENO, buf, strlen (buf));
 }
 
-int try_connect (Host *host)
+int connect_SOCKS (Host *host)
 {
 	if (host->sock && host->stat == 0) {
-		if (connect (host->sock, (struct sockaddr *) &host->sin, sizeof (host->sin)) < 0) {
-			if (errno != EINPROGRESS && errno != EALREADY) {
-				fputs ("error: connect failed\n", stderr);
-				fprintf (stderr, "errno: %d %s\n", errno, strerror (errno));
-				return -1;
-			}
-		} else {
-			FD_SET (host->sock, &afds);
-			host->stat = 1;
+		if (connect (host->sock, (struct sockaddr *) &host->shsin, sizeof (host->shsin)) < 0) {
+			fputs ("error: connect failed\n", stderr);
+			fprintf (stderr, "errno: %d %s\n", errno, strerror (errno));
+			return -1;
 		}
+		FD_SET (host->sock, &afds);
+		host->stat = 1;
+
+		/* blocking-send SOCKS request */
+		send_req (host);
+		/* blocking-recv SOCKS reply */
+		recv_rep (host);
 	}
 	return 0;
+}
+
+void send_req (Host *host)
+{
+	Request	req = {0};
+	req.vn = 4;
+	req.cd = 1;
+	req.dest_port = host->sin.sin_port;
+	req.dest_ip = host->sin.sin_addr;
+	write (host->sock, &req, 10);
+}
+
+void recv_rep (Host *host)
+{
+	Reply	rep = {0};
+	read (host->sock, &rep, sizeof (Reply));
+	if (rep.cd == 91)	/* request rejected or failed */
+		rm_host (host);
 }
 
 void preoutput (Host *hosts)
@@ -260,6 +303,7 @@ int resolv_requests (Host *hosts)
 	char	*method;		/* REQUEST_METHOD */
 	char	*content_len;		/* CONTENT_LENGTH */
 	char	*token, hostname[64], port[10], filename[32];
+	char	shname[64], shport[10];
 
 	method = getenv ("REQUEST_METHOD");
 	content_len = getenv ("CONTENT_LENGTH");
@@ -292,11 +336,18 @@ int resolv_requests (Host *hosts)
 		sscanf (token, "f%d=%s", &i, filename);
 		token = strtok (NULL, "&");
 
+		/* read the hostname or IP address */
+		sscanf (token, "sh%d=%s", &i, shname);
+		token = strtok (NULL, "&");
+		/* read the port of the service */
+		sscanf (token, "sp%d=%s", &i, shport);
+		token = strtok (NULL, "&");
+
 		/* check input validity */
 		if (*hostname == 0 || *port == 0 || *filename == 0)
 			continue;
 
-		if (add_host (&hosts[i - 1], hostname, port, filename) < 0) {
+		if (add_host (&hosts[i - 1], hostname, port, filename, shname, shport) < 0) {
 			free (qstring);
 			fprintf (stderr, "error: add_host failed at hosts[%d]\n", i - 1);
 			return -1;
@@ -308,7 +359,7 @@ int resolv_requests (Host *hosts)
 	return 0;
 }
 
-int add_host (Host *host, char *hostname, char *port, char *filename)
+int add_host (Host *host, char *hostname, char *port, char *filename, char *shname, char *shport)
 {
 	struct hostent		*phe;
 
@@ -323,12 +374,22 @@ int add_host (Host *host, char *hostname, char *port, char *filename)
 		return -1;
 	}
 
+	/* set up SOCKS4 server addr */
+	memset (&host->shsin, 0, sizeof (host->shsin));
+	host->shsin.sin_family = AF_INET;
+	host->shsin.sin_port = htons ((uint16_t) atoi (shport));
+	if ((phe = gethostbyname (shname)))
+		host->shsin.sin_addr = *((struct in_addr *) phe->h_addr_list[0]);
+	else if ((host->shsin.sin_addr.s_addr = inet_addr (shname)) == INADDR_NONE) {
+		fprintf (stderr, "error: cannot get the hostname '%s'\n", shname);
+		return -1;
+	}
+
 	/* allocate the socket */
 	if ((host->sock = socket (PF_INET, SOCK_STREAM, 0)) < 0) {
 		fputs ("error: failed to build a socket\n", stderr);
 		return -1;
 	}
-	fcntl(host->sock, F_SETFL, O_NONBLOCK);	/* set the socket as non-blocking mode */
 
 	/* open the input file */
 	if ((host->fin = fopen (filename, "r")) == NULL) {
