@@ -6,6 +6,9 @@
 #define MAX_USER_LEN	100
 #define MAX_DN_LEN	300
 
+#define BIND_PORT_DEST	9528
+#define BIND_PORT_SRC	9529
+
 typedef struct SOCKS4_req {
 	uint8_t		vn;
 	uint8_t		cd;

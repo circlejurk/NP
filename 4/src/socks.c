@@ -28,8 +28,8 @@
 #include <errno.h>
 #include "socks.h"
 
-Request		req;
-Reply		rep;
+Request		req = {0};
+Reply		rep = {0};
 const char config_file[] = "socks.conf";
 
 int socks (struct sockaddr_in src)
@@ -43,39 +43,71 @@ int socks (struct sockaddr_in src)
 	}
 
 	/* check firewall rules */
-	if (check_fw ())
-		rep.cd = 90;	/* request granted */
-	else
+	if (!check_fw ()) {
 		rep.cd = 91;	/* request rejected */
-
-	/* send the SOCKS4 reply */
-	send_reply ();
-
-	/* end the connection if the request is rejected */
-	if (rep.cd == 91) {
-		verbose (&src);	/* print the verbose output */
+		rep.dest_port = 0;
+		rep.dest_ip.s_addr = 0;
+		send_reply ();
+		verbose (&src);
 		return 0;
 	}
+	rep.cd = 90;	/* request accepted */
 
 	/* build the connection */
 	switch (req.cd) {
 	case 1:		/* CONNECT mode */
+		rep.dest_port = req.dest_port;
+		rep.dest_ip = req.dest_ip;
 		if ((dest = CONNECT ()) < 0) {
 			fputs ("error: CONNECT failed\n", stderr);
-			return -1;
+			rep.cd = 91;	/* request failed */
 		}
 		break;
 	case 2:		/* BIND mode */
+		rep.dest_port = BIND_PORT_SRC;
+		rep.dest_ip.s_addr = 0;
 		if ((dest = BIND ()) < 0) {
 			fputs ("error: BIND failed\n", stderr);
-			return -1;
+			rep.cd = 91;	/* request failed */
 		}
-		/* send the SOCK4 reply again */
 		break;
 	}
 
+	send_reply ();	/* send the SOCK4 reply */
 	verbose (&src);	/* print the verbose output */
-	return transmission (dest);	/* start the connection */
+
+	return (rep.cd == 91) ? -1 : transmission (dest);	/* start the connection */
+}
+
+int BIND (void)
+{
+	return -1;
+}
+
+int CONNECT (void)
+{
+	int	dest;
+	struct sockaddr_in	sin;
+
+	/* set up the socket addr of the destination */
+	memset (&sin, 0, sizeof (sin));
+	sin.sin_family = AF_INET;
+	sin.sin_port = htons (req.dest_port);
+	sin.sin_addr = req.dest_ip;
+
+	/* allocate the socket */
+	if ((dest = socket (PF_INET, SOCK_STREAM, 0)) < 0) {
+		fputs ("error: failed to build a socket\n", stderr);
+		return -1;
+	}
+
+	/* connect to the destination */
+	if (connect (dest, (const struct sockaddr *) &sin, sizeof (sin)) < 0) {
+		fputs ("error: failed to connect to the destination\n", stderr);
+		return -1;
+	}
+
+	return dest;
 }
 
 int transmission (int dest)
@@ -110,37 +142,6 @@ int transmission (int dest)
 	}
 
 	return 0;
-}
-
-int BIND (void)
-{
-	return -1;
-}
-
-int CONNECT (void)
-{
-	int	dest;
-	struct sockaddr_in	sin;
-
-	/* set up the socket addr of the destination */
-	memset (&sin, 0, sizeof (sin));
-	sin.sin_family = AF_INET;
-	sin.sin_port = htons (req.dest_port);
-	sin.sin_addr = req.dest_ip;
-
-	/* allocate the socket */
-	if ((dest = socket (PF_INET, SOCK_STREAM, 0)) < 0) {
-		fputs ("error: failed to build a socket\n", stderr);
-		return -1;
-	}
-
-	/* connect to the destination */
-	if (connect (dest, (const struct sockaddr *) &sin, sizeof (sin)) < 0) {
-		fputs ("error: failed to connect to the destination\n", stderr);
-		return -1;
-	}
-
-	return dest;
 }
 
 void verbose (struct sockaddr_in *src)
@@ -235,11 +236,6 @@ int recv_req (void)
 			return -1;
 		}
 	}
-
-	/* fill in the SOCK4 reply (except the rep.cd) */
-	rep.vn = 0;
-	rep.dest_port = req.dest_port;
-	rep.dest_ip = req.dest_ip;
 
 	return 0;
 }
