@@ -18,6 +18,7 @@
 #include <signal.h>
 #undef __USE_POSIX
 #include <fcntl.h>
+#include <sys/select.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -59,20 +60,19 @@ int socks (struct sockaddr_in src)
 	/* build the connection */
 	switch (req.cd) {
 	case 1:		/* CONNECT mode */
-		rep.dest_port = req.dest_port;
-		rep.dest_ip = req.dest_ip;
 		if ((dest = CONNECT ()) < 0) {
 			fputs ("error: CONNECT failed\n", stderr);
 			rep.cd = 91;	/* request failed */
 		}
+		rep.dest_port = req.dest_port;
+		rep.dest_ip = req.dest_ip;
 		break;
 	case 2:		/* BIND mode */
-		rep.dest_port = BIND_PORT;
-		rep.dest_ip.s_addr = 0;
-		if ((dest = BIND (BIND_PORT)) < 0) {
+		if ((dest = BIND ()) < 0) {
 			fputs ("error: BIND failed\n", stderr);
 			rep.cd = 91;	/* request failed */
 		}
+		rep.dest_ip.s_addr = 0;
 		break;
 	}
 
@@ -82,19 +82,24 @@ int socks (struct sockaddr_in src)
 	return (rep.cd == 91) ? -1 : transmission (dest);	/* start the connection */
 }
 
-int BIND (int port)
+int BIND (void)
 {
 	int			msock, dest;
-	socklen_t		clilen;
+	socklen_t		clilen = sizeof (struct sockaddr_in);
 	struct sockaddr_in	cli;
 
-	if ((msock = passiveTCP (port, 0)) < 0) {
+	/* dynamically bind to an unused port */
+	if ((msock = passiveTCP (0, 0)) < 0) {
 		fputs ("error: passiveTCP failed\n", stderr);
 		return -1;
 	}
 
+	/* getting the dynamically-bound port */
+	getsockname (msock, (struct sockaddr *) &cli, &clilen);
+	rep.dest_port = ntohs (cli.sin_port);
 	send_reply ();	/* send the SOCK4 reply */
 
+	clilen = sizeof (struct sockaddr_in);
 	if ((dest = accept (msock, (struct sockaddr *) &cli, &clilen)) < 0) {
 		fputs ("error: accept failed\n", stderr);
 		return -1;
@@ -140,7 +145,7 @@ int transmission (int dest)
 	FD_SET (dest, &afds);
 	FD_SET (STDIN_FILENO, &afds);
 
-	while (1) {
+	while (__FDS_BITS(&afds)) {
 		/* copy the active fds into read fds */
 		memcpy (&rfds, &afds, sizeof(rfds));
 		/* select from the rfds */
@@ -151,12 +156,23 @@ int transmission (int dest)
 		/* read from src and write to dest */
 		if (FD_ISSET (STDIN_FILENO, &rfds)) {
 			cc = read (STDIN_FILENO, buf, TRANS_SIZE);
-			write (dest, buf, cc);
+			if (cc == 0) {
+				FD_CLR (STDIN_FILENO, &afds);
+				close (STDIN_FILENO);
+				close (STDOUT_FILENO);
+			} else {
+				write (dest, buf, cc);
+			}
 		}
 		/* read from dest and write to src */
 		if (FD_ISSET (dest, &rfds)) {
 			cc = read (dest, buf, TRANS_SIZE);
-			write (STDOUT_FILENO, buf, cc);
+			if (cc == 0) {
+				FD_CLR (dest, &afds);
+				close (dest);
+			} else {
+				write (STDOUT_FILENO, buf, cc);
+			}
 		}
 	}
 
@@ -166,21 +182,20 @@ int transmission (int dest)
 void verbose (struct sockaddr_in *src)
 {
 	fprintf (stderr, "VN: %d, CD: %d, USERID: %s, DN: %s\n", req.vn, req.cd, req.user, req.dn);
-	fprintf (stderr, "DEST IP: %s, DEST PORT: %d\n", inet_ntoa (req.dest_ip), req.dest_port);
-	fprintf (stderr, "SRC IP: %s, SRC PORT: %d\n", inet_ntoa (src->sin_addr), src->sin_port);
-
+	fprintf (stderr, "<S_IP>    : %s\n", inet_ntoa (src->sin_addr));
+	fprintf (stderr, "<S_PORT>  : %d\n", src->sin_port);
+	fprintf (stderr, "<D_IP>    : %s\n", inet_ntoa (req.dest_ip));
+	fprintf (stderr, "<D_PORT>  : %d\n", req.dest_port);
 	if (req.cd == 1)
-		fputs ("SOCKS_CONNECT ", stderr);
+		fputs (  "<Command> : CONNECT\n", stderr);
 	else
-		fputs ("SOCKS_BIND ", stderr);
-
+		fputs (  "<Command> : BIND\n", stderr);
 	if (rep.cd == 90) {
-		fputs ("GRANTED\n", stderr);
+		fputs ("<Reply>   : Granted\n", stderr);
 	} else {
-		fputs ("REJECTED\n", stderr);
+		fputs ("<Reply>   : Rejected\n", stderr);
 	}
-
-	fputs ("\n", stderr);
+	fputs ("<Content> : ", stderr);
 }
 
 void send_reply (void)
