@@ -7,16 +7,15 @@ BUILD_DIR=build
 SRC_DIR=src
 
 CC=gcc
-CFLAGS=-c -Wall -Wextra -Wpedantic -O3 -ansi
-LFLAGS=
+CFLAGS=-c -Wall -Wextra -Wpedantic -g3 -ansi
 
 all:	socks hw4.cgi
 
 socks: ${BUILD_DIR}/server.o ${BUILD_DIR}/socks.o
-	${CC} ${LFLAGS} -o $@ $^
+	${CC} -o $@ $^
 
 hw4.cgi: ${BUILD_DIR}/hw4.cgi.o
-	${CC} ${LFLAGS} -o $@ $^
+	${CC} -o $@ $^
 
 ${BUILD_DIR}/%.o: ${SRC_DIR}/%.c
 	-@[[ -d ${BUILD_DIR} ]] || mkdir ${BUILD_DIR}
