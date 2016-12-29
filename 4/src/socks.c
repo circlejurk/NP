@@ -34,7 +34,7 @@ const char config_file[] = "socks.conf";
 
 int socks (struct sockaddr_in src)
 {
-	struct sockaddr_in	dest;
+	int	dest;	/* the destination socket */
 
 	/* receive the SOCKS4 request from src */
 	if (recv_req () < 0) {
@@ -57,19 +57,58 @@ int socks (struct sockaddr_in src)
 		return 0;
 	}
 
-	/* build connections */
-	if (req.cd == 1)	/* CONNECT mode */
-		CONNECT ();
-	else if (req.cd == 2)	/* BIND mode */
-		/*BIND ();*/
-		;
+	/* build the connection */
+	switch (req.cd) {
+	case 1:		/* CONNECT mode */
+		if ((dest = CONNECT ()) < 0) {
+			fputs ("error: CONNECT failed\n", stderr);
+			return -1;
+		}
+		break;
+	case 2:		/* BIND mode */
+		if ((dest = BIND ()) < 0) {
+			fputs ("error: BIND failed\n", stderr);
+			return -1;
+		}
+		/* send the SOCK4 reply again */
+		break;
+	}
+	verbose (&src);
+
+	/* start the connection */
 
 	return 0;
 }
 
+int BIND (void)
+{
+	return -1;
+}
+
 int CONNECT (void)
 {
-	return 0;
+	int	dest;
+	struct sockaddr_in	sin;
+
+	/* set up the socket addr of the destination */
+	memset (&sin, 0, sizeof (sin));
+	sin.sin_family = AF_INET;
+	sin.sin_port = htons (req.dest_port);
+	sin.sin_addr = req.dest_ip;
+
+	/* allocate the socket */
+	if ((dest = socket (PF_INET, SOCK_STREAM, 0)) < 0) {
+		fputs ("error: failed to build a socket\n", stderr);
+		return -1;
+	}
+
+	/* connect to the destination */
+	if (connect (dest, (const struct sockaddr *) &sin, sizeof (sin)) < 0) {
+		fputs ("error: failed to connect to the destination\n", stderr);
+		return -1;
+	}
+
+	return dest;
 }
 
 void verbose (struct sockaddr_in *src)
