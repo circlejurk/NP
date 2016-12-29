@@ -196,6 +196,7 @@ void verbose (struct sockaddr_in *src)
 		fputs ("<Reply>   : Rejected\n", stderr);
 	}
 	fputs ("<Content> : ", stderr);
+	fputs ("\n\n", stderr);
 }
 
 void send_reply (void)
