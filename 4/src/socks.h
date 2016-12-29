@@ -1,7 +1,7 @@
 #ifndef SOCKS_H
 #define SOCKS_H
 
-#define MAX_BUF_SIZE	500
+#define MAX_BUF_SIZE	100000
 #define MAX_USER_LEN	100
 #define MAX_DN_LEN	300
 
@@ -24,14 +24,14 @@ typedef struct SOCKS4_rep {
 int socks (struct sockaddr_in src);
 int recv_req (void);
 int check_fw (void);
+int isnumber (char *s);
+void send_reply (void);
 void verbose (struct sockaddr_in *src);
 int CONNECT (void);
 int BIND (void);
 
-int isnumber (char *s);
-int readline (char *line, int *connection);
+int transmission (int dest);
 
-int line_to_cmds (char *line, char **cmds);
-void clear_cmds (int progc, char **cmds);
+int readline (char *line, int *connection);
 
 #endif

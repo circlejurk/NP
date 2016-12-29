@@ -49,11 +49,11 @@ int socks (struct sockaddr_in src)
 		rep.cd = 91;	/* request rejected */
 
 	/* send the SOCKS4 reply */
-	write (STDOUT_FILENO, &rep, sizeof (Reply));
+	send_reply ();
 
 	/* end the connection if the request is rejected */
 	if (rep.cd == 91) {
-		verbose (&src);
+		verbose (&src);	/* print the verbose output */
 		return 0;
 	}
 
@@ -73,9 +73,41 @@ int socks (struct sockaddr_in src)
 		/* send the SOCK4 reply again */
 		break;
 	}
-	verbose (&src);
 
-	/* start the connection */
+	verbose (&src);	/* print the verbose output */
+	return transmission (dest);	/* start the connection */
+}
+
+int transmission (int dest)
+{
+	int	nfds = dest + 1;
+	char	buf[MAX_BUF_SIZE];
+	fd_set	rfds, afds;
+
+	/* initialize the active file descriptor set */
+	FD_ZERO (&afds);
+	FD_SET (dest, &afds);
+	FD_SET (STDIN_FILENO, &afds);
+
+	while (1) {
+		/* copy the active fds into read fds */
+		memcpy (&rfds, &afds, sizeof(rfds));
+		/* select from the rfds */
+		if (select (nfds, &rfds, NULL, NULL, NULL) < 0) {
+			fputs ("server error: select failed\n", stderr);
+			return -1;
+		}
+		/* read from src and write to dest */
+		if (FD_ISSET (STDIN_FILENO, &rfds)) {
+			read (STDIN_FILENO, buf, MAX_BUF_SIZE);
+			write (dest, buf, MAX_BUF_SIZE);
+		}
+		/* read from dest and write to src */
+		if (FD_ISSET (dest, &rfds)) {
+			read (dest, buf, MAX_BUF_SIZE);
+			write (STDOUT_FILENO, buf, MAX_BUF_SIZE);
+		}
+	}
 
 	return 0;
 }
@@ -131,6 +163,13 @@ void verbose (struct sockaddr_in *src)
 	fputs ("\n", stderr);
 }
 
+void send_reply (void)
+{
+	rep.dest_port = htons (rep.dest_port);
+	write (STDOUT_FILENO, &rep, sizeof (Reply));
+	rep.dest_port = ntohs (rep.dest_port);
+}
+
 int check_fw (void)
 {
 	int		i;
@@ -174,6 +213,17 @@ int recv_req (void)
 
 	read (STDIN_FILENO, buf, MAX_BUF_SIZE);
 	memcpy (&req, buf, 8);
+
+	/* check request validity */
+	if (req.vn != 4) {
+		fputs ("error: the server only supports version 4 for now\n", stderr);
+		return -1;
+	}
+	if (req.cd != 1 && req.cd != 2) {
+		fputs ("error: \n", stderr);
+		return -1;
+	}
+
 	req.dest_port = ntohs (req.dest_port);
 	strncpy (req.user, buf + 8, MAX_USER_LEN);
 	strncpy (req.dn, buf + 8 + strlen (req.user) + 1, MAX_DN_LEN);
@@ -186,18 +236,8 @@ int recv_req (void)
 		}
 	}
 
-	/* check request validity */
-	if (req.vn != 4) {
-		fputs ("error: the server only supports version 4 for now\n", stderr);
-		return -1;
-	}
-	if (req.cd != 1 && req.cd != 2) {
-		fputs ("error: \n", stderr);
-		return -1;
-	}
-
 	/* fill in the SOCK4 reply (except the rep.cd) */
-	rep.vn = req.vn;
+	rep.vn = 0;
 	rep.dest_port = req.dest_port;
 	rep.dest_ip = req.dest_ip;
 
