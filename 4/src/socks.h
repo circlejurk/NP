@@ -6,8 +6,7 @@
 #define MAX_USER_LEN	100
 #define MAX_DN_LEN	300
 
-#define BIND_PORT_DEST	9528
-#define BIND_PORT_SRC	9529
+#define BIND_PORT	9528
 
 typedef struct SOCKS4_req {
 	uint8_t		vn;
@@ -32,7 +31,7 @@ int isnumber (char *s);
 void send_reply (void);
 void verbose (struct sockaddr_in *src);
 int CONNECT (void);
-int BIND (void);
+int BIND (int port);
 
 int transmission (int dest);
 

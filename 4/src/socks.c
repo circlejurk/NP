@@ -1,7 +1,9 @@
 #include <string.h>
 #include <inttypes.h>
 #define __USE_ISOC99
+#define __USE_POSIX
 #include <stdio.h>
+#undef __USE_POSIX
 #undef __USE_ISOC99
 #define __USE_MISC
 #define __USE_XOPEN2K
@@ -28,6 +30,7 @@
 #include <errno.h>
 #include "socks.h"
 
+extern int passiveTCP (int port, int qlen);
 Request		req = {0};
 Reply		rep = {0};
 const char config_file[] = "socks.conf";
@@ -64,9 +67,9 @@ int socks (struct sockaddr_in src)
 		}
 		break;
 	case 2:		/* BIND mode */
-		rep.dest_port = BIND_PORT_SRC;
+		rep.dest_port = BIND_PORT;
 		rep.dest_ip.s_addr = 0;
-		if ((dest = BIND ()) < 0) {
+		if ((dest = BIND (BIND_PORT)) < 0) {
 			fputs ("error: BIND failed\n", stderr);
 			rep.cd = 91;	/* request failed */
 		}
@@ -79,9 +82,25 @@ int socks (struct sockaddr_in src)
 	return (rep.cd == 91) ? -1 : transmission (dest);	/* start the connection */
 }
 
-int BIND (void)
+int BIND (int port)
 {
-	return -1;
+	int			msock, dest;
+	socklen_t		clilen;
+	struct sockaddr_in	cli;
+
+	if ((msock = passiveTCP (port, 0)) < 0) {
+		fputs ("error: passiveTCP failed\n", stderr);
+		return -1;
+	}
+
+	send_reply ();	/* send the SOCK4 reply */
+
+	if ((dest = accept (msock, (struct sockaddr *) &cli, &clilen)) < 0) {
+		fputs ("error: accept failed\n", stderr);
+		return -1;
+	}
+
+	return dest;
 }
 
 int CONNECT (void)
@@ -112,7 +131,7 @@ int CONNECT (void)
 
 int transmission (int dest)
 {
-	int	nfds = dest + 1;
+	int	nfds = dest + 1, cc;
 	char	buf[TRANS_SIZE];
 	fd_set	rfds, afds;
 
@@ -126,18 +145,18 @@ int transmission (int dest)
 		memcpy (&rfds, &afds, sizeof(rfds));
 		/* select from the rfds */
 		if (select (nfds, &rfds, NULL, NULL, NULL) < 0) {
-			fputs ("server error: select failed\n", stderr);
+			fputs ("error: select failed\n", stderr);
 			return -1;
 		}
 		/* read from src and write to dest */
 		if (FD_ISSET (STDIN_FILENO, &rfds)) {
-			read (STDIN_FILENO, buf, TRANS_SIZE);
-			write (dest, buf, TRANS_SIZE);
+			cc = read (STDIN_FILENO, buf, TRANS_SIZE);
+			write (dest, buf, cc);
 		}
 		/* read from dest and write to src */
 		if (FD_ISSET (dest, &rfds)) {
-			read (dest, buf, TRANS_SIZE);
-			write (STDOUT_FILENO, buf, TRANS_SIZE);
+			cc = read (dest, buf, TRANS_SIZE);
+			write (STDOUT_FILENO, buf, cc);
 		}
 	}
 
@@ -227,8 +246,8 @@ int recv_req (void)
 
 	req.dest_port = ntohs (req.dest_port);
 	strncpy (req.user, buf + 8, MAX_USER_LEN);
-	strncpy (req.dn, buf + 8 + strlen (req.user) + 1, MAX_DN_LEN);
 	if ((req.dest_ip.s_addr & 0xffffff) == 0) {
+		strncpy (req.dn, buf + 8 + strlen (req.user) + 1, MAX_DN_LEN);
 		if ((phe = gethostbyname (req.dn)))
 			req.dest_ip = *((struct in_addr *) phe->h_addr_list[0]);
 		else if ((req.dest_ip.s_addr = inet_addr (req.dn)) == INADDR_NONE) {
