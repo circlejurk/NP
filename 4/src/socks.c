@@ -187,9 +187,9 @@ void verbose (struct sockaddr_in *src)
 	fprintf (stderr, "<D_IP>    : %s\n", inet_ntoa (req.dest_ip));
 	fprintf (stderr, "<D_PORT>  : %d\n", req.dest_port);
 	if (req.cd == 1)
-		fputs (  "<Command> : CONNECT\n", stderr);
+		fputs ("<Command> : CONNECT\n", stderr);
 	else
-		fputs (  "<Command> : BIND\n", stderr);
+		fputs ("<Command> : BIND\n", stderr);
 	if (rep.cd == 90) {
 		fputs ("<Reply>   : Granted\n", stderr);
 	} else {
